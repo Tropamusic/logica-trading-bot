@@ -5,10 +5,10 @@ from tradingview_ta import TA_Handler, Interval
 # --- CONFIGURACIÓN DE IDENTIDAD ---
 TOKEN = "8386038643:AAEngPQbBuu41WBWm7pCYQxm3yEowoJzYaw"
 ID_PERSONAL = "6717348273"
-ID_VIP = "-1003653748217"      # <--- NUEVO ID VIP ACTUALIZADO
+ID_VIP = "-1003653748217"
 ID_BITACORA = "-1003621701961"
 LINK_CONTACTO = "https://t.me/+4bqyiiDGXTA4ZTRh"
-BOT_NAME = "Lógica Trading 📊"
+BOT_NAME = "Lógica Trading Elite 💎"
 
 conteo_operaciones = 0
 wins_totales = 0  
@@ -17,97 +17,90 @@ TIEMPO_DESCANSO = 3600
 
 def enviar_telegram(mensaje, destino):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {
-        "chat_id": destino, 
-        "text": mensaje, 
-        "parse_mode": "Markdown",
-        "disable_web_page_preview": False
-    }
-    try: 
-        requests.post(url, json=payload, timeout=10)
-    except: 
-        pass
+    payload = {"chat_id": destino, "text": mensaje, "parse_mode": "Markdown"}
+    try: requests.post(url, json=payload, timeout=10)
+    except: pass
 
-def analizar_y_operar(par_trading, par_display):
+def analizar_estricto(par_trading, par_display):
     global conteo_operaciones, wins_totales
-    handler = TA_Handler(symbol=par_trading, exchange="FX_IDC", screener="forex", interval=Interval.INTERVAL_1_MINUTE)
+    handler = TA_Handler(
+        symbol=par_trading, 
+        exchange="FX_IDC", 
+        screener="forex", 
+        interval=Interval.INTERVAL_1_MINUTE
+    )
     
     try:
         analysis = handler.get_analysis()
         rsi = analysis.indicators["RSI"]
-        precio_entrada = analysis.indicators["close"]
+        sma200 = analysis.indicators["SMA200"] # Media Móvil de 200 periodos
+        precio_actual = analysis.indicators["close"]
         
-        # --- DETECCIÓN DE SEÑAL (RSI 60/40) ---
-        if (rsi >= 60) or (rsi <= 40):
-            direccion = "BAJA (DOWN) 🔻" if rsi >= 60 else "SUBE (UP) 🟢"
+        # --- FILTRO FRANCOTIRADOR ---
+        # Solo COMPRA si el mercado está barato (RSI < 30) Y la tendencia general es ALCISTA (Precio > SMA200)
+        es_compra = rsi <= 30 and precio_actual > sma200
+        
+        # Solo VENDE si el mercado está caro (RSI > 70) Y la tendencia general es BAJISTA (Precio < SMA200)
+        es_venta = rsi >= 70 and precio_actual < sma200
+
+        if es_compra or es_venta:
+            direccion = "SUBE (UP) 🟢" if es_compra else "BAJA (DOWN) 🔻"
             
-            # 1. ENVIAR SEÑAL OPERATIVA INMEDIATA
-            msg_señal = (f"💎 **{BOT_NAME} - SEÑAL VIP** 💎\n"
+            # 1. SEÑAL VIP DE ALTA PRECISIÓN
+            msg_señal = (f"🔥 **SEÑAL DE ALTA PRECISIÓN (ELITE)** 🔥\n"
                          f"──────────────────\n"
                          f"💱 Par: {par_display}\n"
                          f"⏰ Tiempo: 2 Minutos\n"
                          f"📈 Operación: **{direccion}**\n"
+                         f"📊 Filtro Tendencia: ✅ Confirmado\n"
                          f"──────────────────\n"
-                         f"🔥 **¡ENTRA YA AHORA!** 🔥")
+                         f"🚀 **ENTRADA SEGURA - ¡YA!**")
             
             enviar_telegram(msg_señal, ID_VIP)
             enviar_telegram(msg_señal, ID_PERSONAL)
             
             conteo_operaciones += 1
+            time.sleep(125) # Duración del trade
             
-            # 2. ESPERA DE 2 MINUTOS (DURACIÓN DE LA OPERACIÓN)
-            time.sleep(125) 
+            # 2. RESULTADO
+            final_analisis = handler.get_analysis()
+            precio_final = final_analisis.indicators["close"]
+            win = (es_compra and precio_final > precio_actual) or (es_venta and precio_final < precio_actual)
             
-            # 3. VERIFICAR RESULTADO
-            analisis_final = handler.get_analysis()
-            precio_final = analisis_final.indicators["close"]
+            res_msg = f"✅ **OPERACIÓN GANADORA** ✅" if win else f"❌ **RESULTADO: LOSS**"
+            if win: wins_totales += 1
             
-            # Lógica de acierto
-            es_win = (rsi >= 60 and precio_final < precio_entrada) or (rsi <= 40 and precio_final > precio_entrada)
-            
-            if es_win:
-                wins_totales += 1
-                res_msg = f"✅ **RESULTADO: WIN** ✅\n¡Profit excelente en {par_display}!"
-            else:
-                res_msg = f"❌ **RESULTADO: LOSS** ❌\nMercado volátil en {par_display}."
-            
-            # 4. ENVIAR RESULTADO
             enviar_telegram(res_msg, ID_VIP)
             enviar_telegram(f"📑 *BITÁCORA*: {res_msg}\nMarcador: {wins_totales}W", ID_BITACORA)
-            time.sleep(20) # Pausa entre señales
             
-    except Exception as e:
-        print(f"Error analizando {par_trading}: {e}")
+            # Pausa de seguridad para que el mercado respire tras una señal ganadora
+            time.sleep(60) 
 
-# --- BUCLE PRINCIPAL ---
-print(f"🚀 {BOT_NAME} Operando en Canal VIP: {ID_VIP}")
-enviar_telegram(f"🌟 **SISTEMA {BOT_NAME.upper()} EN LÍNEA**\n\nBuscando las mejores oportunidades del mercado. 📡", ID_VIP)
+    except: pass
+
+# --- INICIO ---
+print(f"🚀 {BOT_NAME} en modo FRANCOTIRADOR activo.")
+enviar_telegram(f"💎 **SISTEMA {BOT_NAME} ACTIVADO**\n\nModo de alta precisión: ON. El bot buscará entradas perfectas con filtros de tendencia. 🎯", ID_VIP)
 
 activos = [
     {"trading": "EURUSD", "display": "EUR/USD(OTC)"},
     {"trading": "GBPUSD", "display": "GBP/USD(OTC)"},
     {"trading": "USDJPY", "display": "USD/JPY(OTC)"},
-    {"trading": "AUDUSD", "display": "AUD/USD(OTC)"}
+    {"trading": "AUDUSD", "display": "AUD/USD(OTC)"},
+    {"trading": "EURJPY", "display": "EUR/JPY(OTC)"}
 ]
 
 while True:
-    # Si llegamos a 4 operaciones, hacemos el reporte y descansamos
     if conteo_operaciones >= LIMITE_OPERACIONES:
-        reporte_final = (f"📊 **SESIÓN FINALIZADA**\n\n"
-                         f"✅ Operaciones Ganadas: {wins_totales}\n"
-                         f"🎯 Efectividad Lograda: VIP\n\n"
-                         f"📩 **¿Quieres entrar al VIP? Contáctame aquí:**\n{LINK_CONTACTO}\n\n"
-                         f"⏳ El bot descansará 1 hora para proteger el capital. 🛡")
-        
-        enviar_telegram(reporte_final, ID_VIP)
+        reporte = (f"📊 **SESIÓN ELITE COMPLETADA**\n\n✅ Ganadas: {wins_totales}\n🎯 Precisión: Máxima\n\n📩 **¿Quieres operar con nosotros?**\n{LINK_CONTACTO}")
+        enviar_telegram(reporte, ID_VIP)
         time.sleep(TIEMPO_DESCANSO)
         conteo_operaciones = 0
         wins_totales = 0
-        enviar_telegram(f"🚀 **{BOT_NAME}** Activo de nuevo. ¡Vamos por más profit!", ID_VIP)
 
     for activo in activos:
         if conteo_operaciones < LIMITE_OPERACIONES:
-            analizar_y_operar(activo['trading'], activo['display'])
-            time.sleep(5) # Pequeña pausa entre escaneo de activos
+            analizar_estricto(activo['trading'], activo['display'])
+            time.sleep(5)
     
-    time.sleep(20) # Pausa de escaneo general
+    time.sleep(30)
