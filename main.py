@@ -1,8 +1,9 @@
 import time
 import requests
+from datetime import datetime, timedelta
 from tradingview_ta import TA_Handler, Interval
 
-# --- CONFIGURACIÓN ---
+# --- CONFIGURACIÓN (TUS DATOS SE MANTIENEN) ---
 TOKEN = "8386038643:AAEngPQbBuu41WBWm7pCYQxm3yEowoJzYaw"
 ID_PERSONAL = "6717348273"
 ID_VIP = "-1003653748217"
@@ -13,7 +14,7 @@ BOT_NAME = "Lógica Trading 📊"
 conteo_operaciones = 0
 wins_totales = 0  
 LIMITE_OPERACIONES = 4  
-TIEMPO_DESCANSO = 3600  
+TIEMPO_DESCANSO_30MIN = 1800 # 30 minutos de descanso
 
 def enviar_telegram(mensaje, destino):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -21,7 +22,7 @@ def enviar_telegram(mensaje, destino):
     try: requests.post(url, json=payload, timeout=10)
     except: pass
 
-def analizar_equilibrado(par_trading, par_display):
+def analizar_sensible(par_trading, par_display):
     global conteo_operaciones, wins_totales
     handler = TA_Handler(
         symbol=par_trading, 
@@ -35,21 +36,19 @@ def analizar_equilibrado(par_trading, par_display):
         rsi = analysis.indicators["RSI"]
         precio_entrada = analysis.indicators["close"]
         
-        # --- LÓGICA EQUILIBRADA (65/35) ---
-        # No es tan extremo como 70 ni tan flojo como 60.
-        es_venta = rsi >= 65
-        es_compra = rsi <= 35
+        # --- LÓGICA SENSIBLE (60/40) ---
+        # Envía señales más rápido para que el canal esté activo
+        es_venta = rsi >= 60
+        es_compra = rsi <= 40
 
         if es_compra or es_venta:
             direccion = "BAJA (DOWN) 🔻" if es_venta else "SUBE (UP) 🟢"
             
-            # Formato profesional para mantener el interés
             msg_señal = (f"💎 **{BOT_NAME} - SEÑAL VIP** 💎\n"
                          f"──────────────────\n"
                          f"💱 Par: {par_display}\n"
                          f"⏰ Tiempo: 2 Minutos\n"
                          f"📈 Operación: **{direccion}**\n"
-                         f"🎯 Probabilidad: ALTA\n"
                          f"──────────────────\n"
                          f"🔥 **¡ENTRA YA AHORA!** 🔥")
             
@@ -57,7 +56,7 @@ def analizar_equilibrado(par_trading, par_display):
             enviar_telegram(msg_señal, ID_PERSONAL)
             
             conteo_operaciones += 1
-            time.sleep(125) # Espera del trade
+            time.sleep(125) # Espera de la operación
             
             # Resultado
             nuevo_analisis = handler.get_analysis()
@@ -66,40 +65,51 @@ def analizar_equilibrado(par_trading, par_display):
             
             if win:
                 wins_totales += 1
-                res_msg = f"✅ **OPERACIÓN GANADORA** ✅\n¡Profit asegurado en {par_display}!"
+                res_msg = f"✅ **OPERACIÓN GANADORA** ✅"
             else:
-                res_msg = f"❌ **RESULTADO: LOSS** ❌\nMercado volátil, preparando siguiente par."
+                res_msg = f"❌ **RESULTADO: LOSS** ❌"
             
             enviar_telegram(res_msg, ID_VIP)
             enviar_telegram(f"📑 *BITÁCORA*: {res_msg}\nMarcador: {wins_totales}W", ID_BITACORA)
-            time.sleep(30) # Pausa para buscar otra oportunidad
+            time.sleep(30) 
 
     except: pass
 
 # --- INICIO ---
-print(f"🚀 {BOT_NAME} en modo EQUILIBRADO activo.")
-enviar_telegram(f"🌟 **{BOT_NAME.upper()} EN LÍNEA**\n\nAnalizando mercado con precisión equilibrada. ¡Prepárense para los profits! 🚀", ID_VIP)
+print(f"🚀 {BOT_NAME} Activo en Modo Sensible (60/40)")
 
 activos = [
     {"trading": "EURUSD", "display": "EUR/USD(OTC)"},
     {"trading": "GBPUSD", "display": "GBP/USD(OTC)"},
     {"trading": "USDJPY", "display": "USD/JPY(OTC)"},
     {"trading": "AUDUSD", "display": "AUD/USD(OTC)"},
-    {"trading": "EURJPY", "display": "EUR/JPY(OTC)"},
-    {"trading": "GBPJP", "display": "GBP/JPY(OTC)"} # Añadí un par extra para flujo constante
+    {"trading": "EURJPY", "display": "EUR/JPY(OTC)"}
 ]
 
 while True:
-    if conteo_operaciones >= LIMITE_OPERACIONES:
-        reporte = (f"📊 **SESIÓN FINALIZADA**\n\n✅ Ganadas: {wins_totales}\n🎯 Efectividad: VIP\n\n📩 **VIP INFO:** {LINK_CONTACTO}")
-        enviar_telegram(reporte, ID_VIP)
-        time.sleep(TIEMPO_DESCANSO)
-        conteo_operaciones = 0
-        wins_totales = 0
+    # FILTRO DE HORARIO (Mañana, Tarde y Noche)
+    hora_actual = datetime.now().hour
+    # Mañana: 8-11 | Tarde: 14-17 | Noche: 20-23
+    es_hora_de_operar = (8 <= hora_actual < 11) or (14 <= hora_actual < 17) or (20 <= hora_actual < 23)
 
-    for activo in activos:
-        if conteo_operaciones < LIMITE_OPERACIONES:
-            analizar_equilibrado(activo['trading'], activo['display'])
-            time.sleep(5)
-    
+    if es_hora_de_operar:
+        if conteo_operaciones >= LIMITE_OPERACIONES:
+            # Reporte con hora de regreso
+            h_regreso = (datetime.now() + timedelta(minutes=30)).strftime('%H:%M')
+            reporte = (f"📊 **SESIÓN FINALIZADA**\n\n✅ Ganadas: {wins_totales}\n"
+                       f"⏳ Pausa de 30 min. Regreso: **{h_regreso}**\n\n📩 VIP: {LINK_CONTACTO}")
+            enviar_telegram(reporte, ID_VIP)
+            time.sleep(TIEMPO_DESCANSO_SEGUNDOS)
+            conteo_operaciones = 0
+            wins_totales = 0
+            enviar_telegram(f"🚀 **{BOT_NAME} ACTIVO**\nBuscando entradas sensibles...", ID_VIP)
+
+        for activo in activos:
+            if conteo_operaciones < LIMITE_OPERACIONES:
+                analizar_sensible(activo['trading'], activo['display'])
+                time.sleep(5)
+    else:
+        # Fuera de horario espera 10 min antes de chequear de nuevo
+        time.sleep(600)
+
     time.sleep(15)
