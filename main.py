@@ -3,7 +3,7 @@ import requests
 from datetime import datetime, timedelta
 from tradingview_ta import TA_Handler, Interval
 
-# --- CONFIGURACIÓN (TUS DATOS SE MANTIENEN) ---
+# --- CONFIGURACIÓN ---
 TOKEN = "8386038643:AAEngPQbBuu41WBWm7pCYQxm3yEowoJzYaw"
 ID_PERSONAL = "6717348273"
 ID_VIP = "-1003653748217"
@@ -14,7 +14,7 @@ BOT_NAME = "Lógica Trading 📊"
 conteo_operaciones = 0
 wins_totales = 0  
 LIMITE_OPERACIONES = 4  
-TIEMPO_DESCANSO_30MIN = 1800 # 30 minutos de descanso
+TIEMPO_DESCANSO = 1800 # 30 min
 
 def enviar_telegram(mensaje, destino):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -24,20 +24,14 @@ def enviar_telegram(mensaje, destino):
 
 def analizar_sensible(par_trading, par_display):
     global conteo_operaciones, wins_totales
-    handler = TA_Handler(
-        symbol=par_trading, 
-        exchange="FX_IDC", 
-        screener="forex", 
-        interval=Interval.INTERVAL_1_MINUTE
-    )
+    handler = TA_Handler(symbol=par_trading, exchange="FX_IDC", screener="forex", interval=Interval.INTERVAL_1_MINUTE)
     
     try:
         analysis = handler.get_analysis()
         rsi = analysis.indicators["RSI"]
         precio_entrada = analysis.indicators["close"]
         
-        # --- LÓGICA SENSIBLE (60/40) ---
-        # Envía señales más rápido para que el canal esté activo
+        # SENSILIBIDAD 60/40
         es_venta = rsi >= 60
         es_compra = rsi <= 40
 
@@ -56,28 +50,38 @@ def analizar_sensible(par_trading, par_display):
             enviar_telegram(msg_señal, ID_PERSONAL)
             
             conteo_operaciones += 1
-            time.sleep(125) # Espera de la operación
             
-            # Resultado
+            # ESPERA DE LA OPERACIÓN (2 MINUTOS)
+            time.sleep(120) 
+            
+            # PAUSA DE SEGURIDAD (5 seg) para que el precio se asiente
+            time.sleep(5) 
+            
+            # CONSULTA PRECIO FINAL PARA COMPARAR
             nuevo_analisis = handler.get_analysis()
             precio_final = nuevo_analisis.indicators["close"]
-            win = (es_venta and precio_final < precio_entrada) or (es_compra and precio_final > precio_entrada)
+            
+            # Lógica de verificación precisa
+            win = False
+            if es_venta and precio_final < precio_entrada:
+                win = True
+            elif es_compra and precio_final > precio_entrada:
+                win = True
             
             if win:
                 wins_totales += 1
-                res_msg = f"✅ **OPERACIÓN GANADORA** ✅"
+                res_msg = f"✅ **OPERACIÓN GANADORA** ✅\nEntrada: {precio_entrada:.5f} | Cierre: {precio_final:.5f}"
             else:
-                res_msg = f"❌ **RESULTADO: LOSS** ❌"
+                res_msg = f"❌ **RESULTADO: LOSS** ❌\nEntrada: {precio_entrada:.5f} | Cierre: {precio_final:.5f}"
             
             enviar_telegram(res_msg, ID_VIP)
             enviar_telegram(f"📑 *BITÁCORA*: {res_msg}\nMarcador: {wins_totales}W", ID_BITACORA)
             time.sleep(30) 
 
-    except: pass
+    except Exception as e:
+        print(f"Error: {e}")
 
-# --- INICIO ---
-print(f"🚀 {BOT_NAME} Activo en Modo Sensible (60/40)")
-
+# --- BUCLE PRINCIPAL ---
 activos = [
     {"trading": "EURUSD", "display": "EUR/USD(OTC)"},
     {"trading": "GBPUSD", "display": "GBP/USD(OTC)"},
@@ -87,29 +91,25 @@ activos = [
 ]
 
 while True:
-    # FILTRO DE HORARIO (Mañana, Tarde y Noche)
-    hora_actual = datetime.now().hour
-    # Mañana: 8-11 | Tarde: 14-17 | Noche: 20-23
-    es_hora_de_operar = (8 <= hora_actual < 11) or (14 <= hora_actual < 17) or (20 <= hora_actual < 23)
+    ahora = datetime.now().hour
+    # Horarios: Mañana (8-11), Tarde (14-17), Noche (20-23)
+    es_hora = (8 <= ahora < 11) or (14 <= ahora < 17) or (20 <= ahora < 23)
 
-    if es_hora_de_operar:
+    if es_hora:
         if conteo_operaciones >= LIMITE_OPERACIONES:
-            # Reporte con hora de regreso
             h_regreso = (datetime.now() + timedelta(minutes=30)).strftime('%H:%M')
             reporte = (f"📊 **SESIÓN FINALIZADA**\n\n✅ Ganadas: {wins_totales}\n"
-                       f"⏳ Pausa de 30 min. Regreso: **{h_regreso}**\n\n📩 VIP: {LINK_CONTACTO}")
+                       f"⏳ Pausa de 30 min. Regreso: **{h_regreso}**")
             enviar_telegram(reporte, ID_VIP)
-            time.sleep(TIEMPO_DESCANSO_SEGUNDOS)
+            time.sleep(TIEMPO_DESCANSO)
             conteo_operaciones = 0
             wins_totales = 0
-            enviar_telegram(f"🚀 **{BOT_NAME} ACTIVO**\nBuscando entradas sensibles...", ID_VIP)
-
+        
         for activo in activos:
             if conteo_operaciones < LIMITE_OPERACIONES:
                 analizar_sensible(activo['trading'], activo['display'])
                 time.sleep(5)
     else:
-        # Fuera de horario espera 10 min antes de chequear de nuevo
-        time.sleep(600)
-
+        time.sleep(600) # Espera 10 min si está fuera de horario
+    
     time.sleep(15)
