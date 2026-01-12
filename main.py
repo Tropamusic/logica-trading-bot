@@ -1,98 +1,110 @@
 import time
 import requests
+import threading
 from tradingview_ta import TA_Handler, Interval
-from datetime import datetime
+import telebot
 
-# --- CONFIGURACIÓN DE IDENTIFICADORES ---
+# --- CONFIGURACIÓN TOTAL ---
 TOKEN = "8386038643:AAEngPQbBuu41WBWm7pCYQxm3yEowoJzYaw"
-
-# Canal donde se envían las SEÑALES (ENTRA YA)
-CANAL_VIP = "-1002237930838"  
-
-# Canal donde se envían los RESULTADOS (WIN/LOSS)
-CANAL_BITACORA = "-1003621701961" 
-
+CANAL_VIP = "-1002237930838"  # Donde se envían las señales para operar
+CANAL_BITACORA = "-1003621701961" # Donde solo llegan resultados
 LINK_CANAL_PRINCIPAL = "https://t.me/+4bqyiiDGXTA4ZTRh" 
 BOT_NAME = "Lógica Trading 📊"
 
-def enviar_telegram(mensaje, canal_id, con_boton=True):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {"chat_id": canal_id, "text": mensaje, "parse_mode": "Markdown"}
-    if con_boton:
-        payload["reply_markup"] = {"inline_keyboard": [[{"text": "📥 UNIRSE AL VIP", "url": LINK_CANAL_PRINCIPAL}]]}
+bot = telebot.TeleBot(TOKEN)
+
+# Función de respuesta al /start (Ahora sí funcionará)
+@bot.message_handler(commands=['start'])
+def welcome(message):
+    markup = telebot.types.InlineKeyboardMarkup()
+    markup.add(telebot.types.InlineKeyboardButton("🚀 UNIRSE AL VIP", url=LINK_CANAL_PRINCIPAL))
+    bot.reply_to(message, f"¡Hola! Soy el {BOT_NAME}. Estoy analizando el mercado para ti.", reply_markup=markup)
+
+def enviar_mensaje(id_chat, texto):
     try:
-        requests.post(url, json=payload, timeout=10)
-    except:
-        pass
+        markup = telebot.types.InlineKeyboardMarkup()
+        markup.add(telebot.types.InlineKeyboardButton("📥 ENTRAR AL BROKER", url=LINK_CANAL_PRINCIPAL))
+        bot.send_message(id_chat, texto, parse_mode="Markdown", reply_markup=markup)
+    except Exception as e:
+        print(f"Error al enviar: {e}")
 
-def obtener_analisis(simbolo):
-    try:
-        handler = TA_Handler(
-            symbol=simbolo,
-            exchange="FX_IDC",
-            screener="forex",
-            interval=Interval.INTERVAL_1_MINUTE
-        )
-        analysis = handler.get_analysis()
-        return analysis.indicators["RSI"], analysis.indicators["close"]
-    except:
-        return None, None
+# --- LÓGICA DE TRADING REAL ---
+def analizar():
+    wins, loss = 0, 0
+    print("📡 Analizando TradingView en tiempo real...")
+    
+    # Aviso de conexión
+    enviar_mensaje(CANAL_VIP, f"✅ **{BOT_NAME} CONECTADO**\n\nBuscando señales operativas ahora mismo.")
 
-# --- INICIO AUTOMÁTICO AL GUARDAR ---
-print(f"🚀 {BOT_NAME} Iniciado correctamente...")
-# Aviso de activación al canal VIP
-enviar_telegram(f"✅ **{BOT_NAME} ACTIVADO**\n\nAnalizando mercado real en TradingView... 📡\nBuscando las mejores señales VIP.", CANAL_VIP)
+    while True:
+        activos = [
+            {"t": "EURUSD", "d": "EUR/USD (OTC)"},
+            {"t": "GBPUSD", "d": "GBP/USD (OTC)"},
+            {"t": "AUDUSD", "d": "AUD/USD (OTC)"}
+        ]
 
-wins, loss = 0, 0
+        for activo in activos:
+            try:
+                handler = TA_Handler(symbol=activo["t"], exchange="FX_IDC", screener="forex", interval=Interval.INTERVAL_1_MINUTE)
+                datos = handler.get_analysis()
+                rsi = datos.indicators["RSI"]
+                precio_e = datos.indicators["close"]
 
-while True:
-    # Pares a monitorear
-    activos = [
-        {"t": "EURUSD", "d": "EUR/USD (OTC)"},
-        {"t": "AUDUSD", "d": "AUD/USD (OTC)"},
-        {"t": "GBPUSD", "d": "GBP/USD (OTC)"},
-        {"t": "USDJPY", "d": "USD/JPY (OTC)"}
-    ]
+                # --- DISPARADOR DE SEÑAL VENTA ---
+                if rsi >= 64:
+                    # PRIMERO: ENVIAR SEÑAL PARA OPERAR
+                    texto_señal = (f"💎 **SEÑAL VIP CONFIRMADA** 💎\n\n"
+                                   f"💱 Par: {activo['d']}\n"
+                                   f"🔻 Operación: **BAJA (DOWN)**\n"
+                                   f"⏱ Tiempo: 2 Minutos\n"
+                                   f"📉 RSI: {rsi:.2f}\n\n"
+                                   f"🔥 **¡ENTRAR AHORA!** 🔥")
+                    enviar_mensaje(CANAL_VIP, texto_señal)
+                    
+                    time.sleep(125) # Tiempo de espera del trade
+                    
+                    # SEGUNDO: ENVIAR RESULTADO
+                    final = handler.get_analysis().indicators["close"]
+                    if final < precio_e:
+                        wins += 1
+                        res = f"✅ **RESULTADO: WIN** ✅\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
+                    else:
+                        loss += 1
+                        res = f"❌ **RESULTADO: LOSS** ❌\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
+                    
+                    enviar_mensaje(CANAL_VIP, res)
+                    enviar_mensaje(CANAL_BITACORA, f"📑 **BITÁCORA**\n{res}")
 
-    for activo in activos:
-        rsi, precio_entrada = obtener_analisis(activo["t"])
+                # --- DISPARADOR DE SEÑAL COMPRA ---
+                elif rsi <= 36:
+                    # PRIMERO: ENVIAR SEÑAL PARA OPERAR
+                    texto_señal = (f"💎 **SEÑAL VIP CONFIRMADA** 💎\n\n"
+                                   f"💱 Par: {activo['d']}\n"
+                                   f"🟢 Operación: **SUBE (UP)**\n"
+                                   f"⏱ Tiempo: 2 Minutos\n"
+                                   f"📈 RSI: {rsi:.2f}\n\n"
+                                   f"🔥 **¡ENTRAR AHORA!** 🔥")
+                    enviar_mensaje(CANAL_VIP, texto_señal)
+                    
+                    time.sleep(125)
+                    
+                    final = handler.get_analysis().indicators["close"]
+                    if final > precio_e:
+                        wins += 1
+                        res = f"✅ **RESULTADO: WIN** ✅\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
+                    else:
+                        loss += 1
+                        res = f"❌ **RESULTADO: LOSS** ❌\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
+                    
+                    enviar_mensaje(CANAL_VIP, res)
+                    enviar_mensaje(CANAL_BITACORA, f"📑 **BITÁCORA**\n{res}")
+
+            except:
+                continue
         
-        if rsi:
-            # --- LÓGICA DE VENTA (DOWN) ---
-            if rsi >= 64:
-                # 1. Envía la señal al canal VIP
-                enviar_telegram(f"💎 **SEÑAL VIP** 💎\n\n💱 Par: {activo['d']}\n🔻 Operación: **BAJA (DOWN)**\n⏱ Tiempo: 2 Minutos\n📉 RSI: {rsi:.2f}\n\n¡ENTRA YA! 🔥", CANAL_VIP)
-                
-                time.sleep(125) # Espera el tiempo de la operación (2 min)
-                
-                _, precio_final = obtener_analisis(activo["t"])
-                if precio_final and precio_final < precio_entrada:
-                    wins += 1
-                    res_msg = f"✅ **RESULTADO: WIN** ✅\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
-                else:
-                    loss += 1
-                    res_msg = f"❌ **RESULTADO: LOSS** ❌\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
-                
-                # 2. Envía el resultado a ambos para transparencia
-                enviar_telegram(res_msg, CANAL_VIP)
-                enviar_telegram(f"📑 *REGISTRO DE BITÁCORA*\n{res_msg}", CANAL_BITACORA)
+        time.sleep(10)
 
-            # --- LÓGICA DE COMPRA (UP) ---
-            elif rsi <= 36:
-                # 1. Envía la señal al canal VIP
-                enviar_telegram(f"💎 **SEÑAL VIP** 💎\n\n💱 Par: {activo['d']}\n🟢 Operación: **SUBE (UP)**\n⏱ Tiempo: 2 Minutos\n📈 RSI: {rsi:.2f}\n\n¡ENTRA YA! 🔥", CANAL_VIP)
-                
-                time.sleep(125)
-                
-                _, precio_final = obtener_analisis(activo["t"])
-                if precio_final and precio_final > precio_entrada:
-                    wins += 1
-                    res_msg = f"✅ **RESULTADO: WIN** ✅\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
-                else:
-                    loss += 1
-                    res_msg = f"❌ **RESULTADO: LOSS** ❌\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
-                
-                enviar_telegram(res_msg, CANAL_VIP)
-                enviar_telegram(f"📑 *REGISTRO DE BITÁCORA*\n{res_msg}", CANAL_BITACORA)
-
-    time.sleep(10) # Pausa de escaneo para no saturar
+if __name__ == "__main__":
+    threading.Thread(target=analizar, daemon=True).start()
+    bot.infinity_polling()
+    
