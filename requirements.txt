@@ -1,2 +1,2 @@
 requests
-tradingview-ta
+tradingview_ta
