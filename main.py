@@ -3,116 +3,110 @@ import requests
 from tradingview_ta import TA_Handler, Interval
 from datetime import datetime
 
-# --- CONFIGURACIÓN DE CANALES ACTUALIZADA ---
+# --- CONFIGURACIÓN DE IDENTIFICADORES ---
 TOKEN = "8386038643:AAEngPQbBuu41WBWm7pCYQxm3yEowoJzYaw"
-CANAL_PRINCIPAL = "6717348273"  
+CANAL_PRINCIPAL = "-1002237930838"  
 CANAL_RESULTADOS = "-1003621701961" 
 LINK_CANAL_PRINCIPAL = "https://t.me/+4bqyiiDGXTA4ZTRh" 
-LINK_BITACORA = "https://t.me/LogicaTradingResultados"
 BOT_NAME = "Lógica Trading 📊"
 
+# Horarios de operación activos
 HORARIOS_ACTIVOS = [(8, 11), (14, 17), (20, 23)]
-conteo_operaciones = 0
-wins_totales, loss_totales = 0, 0
-sesion_anunciada = False 
-offset = 0 
 
-def enviar_telegram(mensaje, canal_id, con_boton=False, es_bienvenida=False):
+def enviar_telegram(mensaje, canal_id, con_boton=True):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {"chat_id": canal_id, "text": mensaje, "parse_mode": "Markdown"}
+    payload = {
+        "chat_id": canal_id, 
+        "text": mensaje, 
+        "parse_mode": "Markdown"
+    }
     if con_boton:
-        payload["reply_markup"] = {"inline_keyboard": [[{"text": "📥 UNIRSE AL VIP", "url": LINK_CANAL_PRINCIPAL}]]}
-    if es_bienvenida:
-        payload["reply_markup"] = {"inline_keyboard": [
-            [{"text": "🚀 Canal Principal", "url": LINK_CANAL_PRINCIPAL}],
-            [{"text": "📈 Bitácora", "url": LINK_BITACORA}]
-        ]}
-    try: requests.post(url, json=payload, timeout=10)
-    except: pass
-
-def manejar_mensajes():
-    global offset
-    url = f"https://api.telegram.org/bot{TOKEN}/getUpdates?offset={offset}&timeout=1"
+        payload["reply_markup"] = {
+            "inline_keyboard": [[{"text": "📥 UNIRSE AL VIP", "url": LINK_CANAL_PRINCIPAL}]]
+        }
     try:
-        res = requests.get(url).json()
-        for update in res.get("result", []):
-            offset = update["update_id"] + 1
-            if "message" in update and "text" in update["message"]:
-                chat_id = update["message"]["chat"]["id"]
-                if update["message"]["text"] == "/start":
-                    msg = f"¡Bienvenido a *{BOT_NAME}*!\n\nAnalizamos el mercado 24/7. Únete abajo:"
-                    enviar_telegram(msg, chat_id, es_bienvenida=True)
-    except: pass
+        r = requests.post(url, json=payload, timeout=10)
+        return r.json()
+    except:
+        return None
+
+def obtener_datos_tv(simbolo):
+    try:
+        handler = TA_Handler(
+            symbol=simbolo,
+            exchange="FX_IDC",
+            screener="forex",
+            interval=Interval.INTERVAL_1_MINUTE
+        )
+        analysis = handler.get_analysis()
+        rsi = analysis.indicators["RSI"]
+        precio = analysis.indicators["close"]
+        return rsi, precio
+    except Exception as e:
+        print(f"Error en TradingView para {simbolo}: {e}")
+        return None, None
 
 def esta_en_horario():
-    # El horario actual es 20:00 - 23:00, así que ahora está ACTIVO
     hora_actual = datetime.now().hour
     for inicio, fin in HORARIOS_ACTIVOS:
         if inicio <= hora_actual < fin: return True
     return False
 
-def analizar_y_operar(par_trading, par_display):
-    global conteo_operaciones, wins_totales, loss_totales
-    handler = TA_Handler(symbol=par_trading, exchange="FX_IDC", screener="forex", interval=Interval.INTERVAL_1_MINUTE)
-    try:
-        analysis = handler.get_analysis()
-        rsi = analysis.indicators["RSI"]
-        
-        # FASE 1: PRE-AVISO (RSI entre 60-67 o 33-40)
-        if (60 <= rsi < 67) or (40 >= rsi > 33):
-            dir_pre = "VENDER (DOWN) 🔴" if rsi > 50 else "COMPRAR (UP) 🟢"
-            enviar_telegram(f"⚠️ *PRE-AVISO*\nPair: {par_display}\nAcción: *{dir_pre}*", CANAL_PRINCIPAL)
-            
-            # Espera 1 minuto y medio para ver si llega al punto de entrada real
-            time.sleep(110)
-            
-            nuevo = handler.get_analysis()
-            rsi_nuevo = nuevo.indicators["RSI"]
-            
-            # FASE 2: SEÑAL REAL (RSI rompe 64 o 36)
-            if (rsi_nuevo >= 64) or (rsi_nuevo <= 36):
-                direccion = "🔻 TRADE DOWN (BAJA)" if rsi_nuevo >= 50 else "⬆️ TRADE UP (SUBE)"
-                precio_e = nuevo.indicators["close"]
-                
-                enviar_telegram(f"💎 *{BOT_NAME} - SEÑAL*\n━━━━━━━━━━━━━━━\n💱 Pair: {par_display}\n⏰ 2 Minutos\n📈 Operación: *{direccion}*", CANAL_PRINCIPAL)
-                
-                conteo_operaciones += 1
-                time.sleep(125) # Espera los 2 minutos de la operación
-                
-                # FASE 3: RESULTADO
-                precio_f = handler.get_analysis().indicators["close"]
-                es_win = (direccion == "🔻 TRADE DOWN (BAJA)" and precio_f < precio_e) or (direccion == "⬆️ TRADE UP (SUBE)" and precio_f > precio_e)
-                
-                res_msg = f"✅ *RESULTADO: WIN* ✅" if es_win else f"❌ *RESULTADO: LOSS* ❌"
-                if es_win: wins_totales += 1 
-                else: loss_totales += 1
-                
-                enviar_telegram(res_msg + f"\n{par_display}", CANAL_PRINCIPAL)
-                enviar_telegram(f"📑 *BITÁCORA*\n{res_msg}\n📊 Marcador: {wins_totales}W - {loss_totales}L", CANAL_RESULTADOS, con_boton=True)
-    except Exception as e:
-        print(f"Error en análisis: {e}")
+# --- INICIO DEL PROGRAMA ---
+print("🚀 Bot LogicaDeApuesta Conectado a TradingView")
 
-# --- BUCLE PRINCIPAL ---
+# Mensaje de activación inmediata al guardar el código
+enviar_telegram(f"✅ **{BOT_NAME} CONECTADO**\n\nSincronizando con TradingView... 📡\nEstado: Buscando señales en pares OTC.", CANAL_PRINCIPAL)
+
+wins, loss = 0, 0
+
 while True:
-    manejar_mensajes()
     if esta_en_horario():
-        if not sesion_anunciada:
-            enviar_telegram(f"🔔 *SESIÓN INICIADA*\n\nAnalizando mercado... 📡", CANAL_PRINCIPAL)
-            sesion_anunciada = True
-            conteo_operaciones, wins_totales, loss_totales = 0, 0, 0
-            
         activos = [
-            {"trading":"AUDUSD","display":"AUD/USD(OTC)"}, 
-            {"trading":"EURUSD","display":"EUR/USD(OTC)"}, 
-            {"trading":"GBPUSD","display":"GBP/USD(OTC)"}, 
-            {"trading":"USDJPY","display":"USD/JPY(OTC)"}
+            {"t": "EURUSD", "d": "EUR/USD (OTC)"},
+            {"t": "AUDUSD", "d": "AUD/USD (OTC)"},
+            {"t": "GBPUSD", "d": "GBP/USD (OTC)"},
+            {"t": "USDJPY", "d": "USD/JPY (OTC)"}
         ]
-        
-        for activo in activos:
-            if conteo_operaciones < 4 and esta_en_horario():
-                analizar_y_operar(activo['trading'], activo['display'])
-    else:
-        sesion_anunciada = False
-    
-    time.sleep(2) # Pausa ligera para no saturar el CPU
+
+        for par in activos:
+            rsi, precio_entrada = obtener_datos_tv(par["t"])
+            
+            if rsi:
+                # LÓGICA DE SEÑAL REAL
+                # VENTA (DOWN) - RSI sobre 64
+                if rsi >= 64:
+                    enviar_telegram(f"💎 **SEÑAL CONFIRMADA** 💎\n\n💱 Par: {par['d']}\n🔻 Operación: **BAJA (DOWN)**\n⏱ Tiempo: 2 Minutos\n📉 RSI: {rsi:.2f}\n\n¡ENTRAR YA! 🔥", CANAL_PRINCIPAL)
+                    
+                    time.sleep(125) # Espera la duración de la operación
+                    
+                    _, precio_final = obtener_datos_tv(par["t"])
+                    if precio_final and precio_final < precio_entrada:
+                        wins += 1
+                        resultado = "✅ RESULTADO: WIN ✅"
+                    else:
+                        loss += 1
+                        resultado = "❌ RESULTADO: LOSS ❌"
+                    
+                    enviar_telegram(f"{resultado}\nPar: {par['d']}\nMarcador: {wins}W - {loss}L", CANAL_PRINCIPAL)
+                    enviar_telegram(f"📑 *BITÁCORA*\n{resultado}\n📊 Marcador: {wins}W - {loss}L", CANAL_RESULTADOS)
                 
+                # COMPRA (UP) - RSI bajo 36
+                elif rsi <= 36:
+                    enviar_telegram(f"💎 **SEÑAL CONFIRMADA** 💎\n\n💱 Par: {par['d']}\n🟢 Operación: **SUBE (UP)**\n⏱ Tiempo: 2 Minutos\n📈 RSI: {rsi:.2f}\n\n¡ENTRAR YA! 🔥", CANAL_PRINCIPAL)
+                    
+                    time.sleep(125)
+                    
+                    _, precio_final = obtener_datos_tv(par["t"])
+                    if precio_final and precio_final > precio_entrada:
+                        wins += 1
+                        resultado = "✅ RESULTADO: WIN ✅"
+                    else:
+                        loss += 1
+                        resultado = "❌ RESULTADO: LOSS ❌"
+                    
+                    enviar_telegram(f"{resultado}\nPar: {par['d']}\nMarcador: {wins}W - {loss}L", CANAL_PRINCIPAL)
+                    enviar_telegram(f"📑 *BITÁCORA*\n{resultado}\n📊 Marcador: {wins}W - {loss}L", CANAL_RESULTADOS)
+
+    time.sleep(10) # Escaneo constante cada 10 segundos
+    
