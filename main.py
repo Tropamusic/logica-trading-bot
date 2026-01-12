@@ -6,7 +6,7 @@ from tradingview_ta import TA_Handler, Interval
 
 # --- CONFIGURACIÓN ---
 TOKEN = "8386038643:AAEngPQbBuu41WBWm7pCYQxm3yEowoJzYaw"
-ID_PERSONAL = "6717348273" # EL BOT SOLO TE HABLARÁ A TI
+ID_PERSONAL = "6717348273" # Solo tú recibirás las alertas
 BOT_NAME = "Lógica Trading 📊"
 
 MI_ZONA_HORARIA = pytz.timezone('America/Caracas') 
@@ -17,47 +17,52 @@ def enviar_telegram(mensaje, destino):
     try: requests.post(url, json=payload, timeout=10)
     except: pass
 
-def analizar_privado(par_trading, par_display):
+def analizar_asistente(par_trading, par_display):
+    # Usamos exchange FX_IDC para mercado real y OANDA para mayor estabilidad
     handler = TA_Handler(symbol=par_trading, exchange="FX_IDC", screener="forex", interval=Interval.INTERVAL_1_MINUTE)
+    
     try:
         analysis = handler.get_analysis()
         rsi = analysis.indicators["RSI"]
+        recomendacion = analysis.summary["RECOMMENDATION"]
+        precio = analysis.indicators["close"]
         
-        # Mantenemos 60/40 para que tengas buenas oportunidades
-        es_venta = rsi >= 60
-        es_compra = rsi <= 40
+        # Filtro profesional: RSI + Recomendación fuerte de TradingView
+        es_venta = rsi >= 60 and "SELL" in recomendacion
+        es_compra = rsi <= 40 and "BUY" in recomendacion
 
         if es_compra or es_venta:
-            direccion = "BAJA (DOWN) 🔻" if es_venta else "SUBE (UP) 🟢"
+            dir_emoji = "🔴 VENTA" if es_venta else "🟢 COMPRA"
+            accion = "BAJA 🔻" if es_venta else "SUBE 🟢"
             
-            # Formato listo para que solo le des a 'Reenviar'
-            msg_para_ti = (f"⚠️ **NUEVA OPORTUNIDAD DETECTADA** ⚠️\n"
-                           f"──────────────────\n"
-                           f"💱 Par: **{par_display}**\n"
-                           f"📈 Operación: **{direccion}**\n"
-                           f"⏰ Tiempo: 2 Minutos\n"
-                           f"──────────────────\n"
-                           f"👉 *Lógica, ¿quieres enviarla al VIP?*")
+            # Formato de alerta privada para TI
+            msg_alerta = (f"🔔 **ALERTA DE ENTRADA** 🔔\n"
+                          f"──────────────────\n"
+                          f"💹 Par: **{par_display}**\n"
+                          f"📉 RSI: {rsi:.2f}\n"
+                          f"💰 Precio: {precio:.5f}\n"
+                          f"⚡️ Acción: **{dir_emoji} ({accion})**\n"
+                          f"──────────────────\n"
+                          f"📢 *Copia y envía al VIP si te gusta la gráfica.*")
             
-            enviar_telegram(msg_para_ti, ID_PERSONAL)
+            enviar_telegram(msg_alerta, ID_PERSONAL)
             
-            # Pausa de 3 minutos para que no te sature con el mismo par
-            time.sleep(180) 
+            # Bloqueo de 5 min para ese par (no queremos spam en tu privado)
+            time.sleep(300) 
     except: pass
 
-# --- ACTIVOS A ANALIZAR ---
+# Activos sugeridos por su liquidez
 activos = [
     {"trading": "EURUSD", "display": "EUR/USD"},
     {"trading": "GBPUSD", "display": "GBP/USD"},
     {"trading": "USDJPY", "display": "USD/JPY"},
-    {"trading": "AUDUSD", "display": "AUD/USD"}
+    {"trading": "AUDUSD", "display": "AUD/USD"},
+    {"trading": "EURJPY", "display": "EUR/JPY"}
 ]
 
-print("🤖 Modo Asistente Personal Activo...")
+print("🕵️‍♂️ Asistente personal en línea. Analizando mercados...")
 
 while True:
-    # En este modo, el bot analiza siempre que esté encendido
-    # Tú decides cuándo hacer caso y cuándo no.
     for activo in activos:
-        analizar_privado(activo['trading'], activo['display'])
-        time.sleep(5)
+        analizar_asistente(activo['trading'], activo['display'])
+        time.sleep(2) # Escaneo rápido entre pares
