@@ -15,7 +15,7 @@ def enviar_telegram(mensaje, canal_id):
         "chat_id": canal_id, 
         "text": mensaje, 
         "parse_mode": "Markdown",
-        "reply_markup": {"inline_keyboard": [[{"text": "📥 UNIRSE AL VIP", "url": LINK_CANAL_PRINCIPAL}]]}
+        "reply_markup": {"inline_keyboard": [[{"text": "📥 ENTRAR AL BROKER", "url": LINK_CANAL_PRINCIPAL}]]}
     }
     try:
         requests.post(url, json=payload, timeout=10)
@@ -35,70 +35,57 @@ def obtener_analisis(simbolo):
     except:
         return None, None
 
-# --- INICIO DEL BOT ---
-print(f"🚀 {BOT_NAME} Iniciado 24/7...")
-enviar_telegram(f"✅ **{BOT_NAME} ACTIVADO**\n\nSincronizado con TradingView 24/7. 📡\nEnviando señales cada 2 minutos.", CANAL_VIP)
-
+# --- INICIO DE LÓGICA ---
+print(f"🚀 {BOT_NAME} Activo: Ciclos de 4 operaciones con descanso.")
 wins, loss = 0, 0
 
 while True:
-    # Definimos una racha de trabajo (ejemplo: 10 señales antes de descansar)
-    operaciones_realizadas = 0
+    enviar_telegram(f"✅ **SESIÓN INICIADA**\n\nBuscando las próximas **4 señales** de alta precisión... 📡", CANAL_VIP)
     
-    while operaciones_realizadas < 10:
-        activos = [
-            {"t": "EURUSD", "d": "EUR/USD (OTC)"},
-            {"t": "GBPUSD", "d": "GBP/USD (OTC)"},
-            {"t": "AUDUSD", "d": "AUD/USD (OTC)"},
-            {"t": "USDJPY", "d": "USD/JPY (OTC)"}
-        ]
+    contador_ciclo = 0
 
-        for activo in activos:
-            rsi, precio_entrada = obtener_analisis(activo["t"])
+    # CICLO DE 4 OPERACIONES
+    while contador_ciclo < 4:
+        activos = ["EURUSD", "GBPUSD", "AUDUSD", "USDJPY", "EURJPY"]
+        
+        for par in activos:
+            if contador_ciclo >= 4: break # Salir si ya completó las 4 en este ciclo
+            
+            rsi, precio_entrada = obtener_analisis(par)
             
             if rsi:
-                # SEÑAL DE VENTA (DOWN)
-                if rsi >= 64:
-                    enviar_telegram(f"💎 **SEÑAL VIP CONFIRMADA** 💎\n\n💱 Par: {activo['d']}\n🔻 Acción: **BAJA (DOWN)**\n⏱ Tiempo: 2 Minutos\n📊 RSI: {rsi:.2f}\n\n🔥 **¡ENTRAR YA!** 🔥", CANAL_VIP)
+                # NIVEL DE SEGURIDAD RSI (60/40)
+                if rsi >= 60 or rsi <= 40:
+                    direccion = "BAJA (DOWN) 🔻" if rsi >= 60 else "SUBE (UP) 🟢"
                     
-                    time.sleep(125) # 2 minutos de operación
+                    # 1. ENVIAR SEÑAL OPERATIVA
+                    enviar_telegram(f"💎 **SEÑAL VIP CONFIRMADA** 💎\n\n💱 Par: {par} (OTC)\n🎯 Acción: **{direccion}**\n⏱ Tiempo: 2 Minutos\n📊 RSI: {rsi:.2f}\n\n🔥 **¡ENTRA YA!** 🔥", CANAL_VIP)
                     
-                    _, precio_final = obtener_analisis(activo["t"])
-                    if precio_final and precio_final < precio_entrada:
+                    # 2. ESPERA DE LA OPERACIÓN (2 MINUTOS)
+                    time.sleep(125) 
+                    
+                    # 3. VERIFICACIÓN DE RESULTADO
+                    _, precio_final = obtener_analisis(par)
+                    if (rsi >= 60 and precio_final < precio_entrada) or (rsi <= 40 and precio_final > precio_entrada):
                         wins += 1
-                        res = f"✅ **WIN GANADA** ✅\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
+                        res = f"✅ **RESULTADO: WIN** ✅\nPar: {par}\nMarcador Global: {wins}W - {loss}L"
                     else:
                         loss += 1
-                        res = f"❌ **LOSS PERDIDA** ❌\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
+                        res = f"❌ **RESULTADO: LOSS** ❌\nPar: {par}\nMarcador Global: {wins}W - {loss}L"
                     
                     enviar_telegram(res, CANAL_VIP)
                     enviar_telegram(f"📑 *BITÁCORA*\n{res}", CANAL_BITACORA)
-                    operaciones_realizadas += 1
-                    time.sleep(10) # Pausa breve para buscar la siguiente
-
-                # SEÑAL DE COMPRA (UP)
-                elif rsi <= 36:
-                    enviar_telegram(f"💎 **SEÑAL VIP CONFIRMADA** 💎\n\n💱 Par: {activo['d']}\n🟢 Acción: **SUBE (UP)**\n⏱ Tiempo: 2 Minutos\n📈 RSI: {rsi:.2f}\n\n🔥 **¡ENTRAR YA!** 🔥", CANAL_VIP)
                     
-                    time.sleep(125)
-                    
-                    _, precio_final = obtener_analisis(activo["t"])
-                    if precio_final and precio_final > precio_entrada:
-                        wins += 1
-                        res = f"✅ **WIN GANADA** ✅\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
-                    else:
-                        loss += 1
-                        res = f"❌ **LOSS PERDIDA** ❌\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
-                    
-                    enviar_telegram(res, CANAL_VIP)
-                    enviar_telegram(f"📑 *BITÁCORA*\n{res}", CANAL_BITACORA)
-                    operaciones_realizadas += 1
-                    time.sleep(10)
+                    contador_ciclo += 1
+                    print(f"Operación {contador_ciclo}/4 completada.")
+                    time.sleep(10) # Pausa entre señales
+            
+        time.sleep(15) # Escaneo si no hay señales activas
 
-        time.sleep(15) # Escaneo constante si no hay señales
-
-    # --- PERIODO DE DESCANSO ---
-    enviar_telegram(f"⏳ **MODO DESCANSO ACTIVADO**\n\nHe completado un ciclo de señales. Tomaré un descanso de 1 hora para analizar la tendencia global.\n\nMarcador actual: {wins}W - {loss}L", CANAL_VIP)
-    print("Iniciando descanso de 1 hora...")
-    time.sleep(3600) # Descansa exactamente 1 hora (3600 segundos)
-    enviar_telegram(f"🚀 **BOT REACTIVADO**\n\nEl descanso ha terminado. ¡Volvemos a buscar señales ganadoras!", CANAL_VIP)
+    # --- DESCANSO DE SEGURIDAD (ANTIDETECCIÓN) ---
+    enviar_telegram(f"⏳ **MODO ANTI-DETECCIÓN ACTIVADO**\n\nHe completado las 4 operaciones del ciclo. Para proteger las cuentas de los usuarios, el bot descansará **1 HORA**.\n\nPróximo reinicio en: 60 minutos.", CANAL_VIP)
+    print("Iniciando descanso de 1 hora para evitar detección del broker...")
+    
+    time.sleep(3600) # 1 hora de descanso absoluto
+    
+    enviar_telegram(f"🚀 **REINICIANDO SESIÓN**\n\nDescanso finalizado. Buscando nuevas oportunidades... 🔥", CANAL_VIP)
