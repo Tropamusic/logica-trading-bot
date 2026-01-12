@@ -31,7 +31,7 @@ def enviar_telegram(mensaje, destino, botones=None):
     try: requests.post(url, json=payload, timeout=10)
     except: pass
 
-def analizar_equilibrado(par_trading, par_display):
+def analizar_sensible(par_trading, par_display):
     global conteo_operaciones, wins_totales
     handler = TA_Handler(symbol=par_trading, exchange="FX_IDC", screener="forex", interval=Interval.INTERVAL_1_MINUTE)
     
@@ -40,8 +40,13 @@ def analizar_equilibrado(par_trading, par_display):
         rsi = analysis.indicators["RSI"]
         precio_entrada = analysis.indicators["close"]
         
-        if (rsi >= 65) or (rsi <= 35):
-            direccion = "BAJA (DOWN) 🔻" if rsi >= 65 else "SUBE (UP) 🟢"
+        # --- AJUSTE DE SENSIBILIDAD (60/40) ---
+        # Esto enviará señales más seguido que el nivel 65/35
+        es_venta = rsi >= 60
+        es_compra = rsi <= 40
+
+        if es_compra or es_venta:
+            direccion = "BAJA (DOWN) 🔻" if es_venta else "SUBE (UP) 🟢"
             
             msg_señal = (f"💎 **{BOT_NAME} - SEÑAL VIP** 💎\n"
                          f"──────────────────\n"
@@ -55,10 +60,12 @@ def analizar_equilibrado(par_trading, par_display):
             enviar_telegram(msg_señal, ID_PERSONAL)
             
             conteo_operaciones += 1
-            time.sleep(125)
+            time.sleep(125) # Tiempo de la operación
             
-            nuevo_p = handler.get_analysis().indicators["close"]
-            win = (rsi >= 65 and nuevo_p < precio_entrada) or (rsi <= 35 and nuevo_p > precio_entrada)
+            # Resultado
+            nuevo_analisis = handler.get_analysis()
+            precio_final = nuevo_analisis.indicators["close"]
+            win = (es_venta and precio_final < precio_entrada) or (es_compra and precio_final > precio_entrada)
             
             res_msg = f"✅ **OPERACIÓN GANADORA** ✅" if win else f"❌ **RESULTADO: LOSS** ❌"
             if win: wins_totales += 1
@@ -69,7 +76,7 @@ def analizar_equilibrado(par_trading, par_display):
     except: pass
 
 # --- INICIO ---
-print(f"🚀 {BOT_NAME} Activo - Descansos de 30 min.")
+print(f"🚀 {BOT_NAME} Activo - Modo SENSIBLE (60/40)")
 
 activos = [
     {"trading": "EURUSD", "display": "EUR/USD(OTC)"},
@@ -80,26 +87,28 @@ activos = [
 ]
 
 while True:
-    if conteo_operaciones >= LIMITE_OPERACIONES:
-        # Calcular hora de regreso
-        hora_regreso = (datetime.now() + timedelta(minutes=30)).strftime('%H:%M')
-        
-        reporte = (f"📊 **SESIÓN FINALIZADA**\n\n"
-                   f"✅ Ganadas: {wins_totales}\n"
-                   f"🎯 Marcador: {wins_totales}W - {LIMITE_OPERACIONES - wins_totales}L\n\n"
-                   f"⏳ **PAUSA DE 30 MINUTOS**\n"
-                   f"Próxima sesión a las: **{hora_regreso}** (Hora local)\n\n"
-                   f"📩 Contacto: {LINK_VIP}")
-        
-        enviar_telegram(reporte, ID_VIP)
-        time.sleep(TIEMPO_DESCANSO_SEGUNDOS)
-        
-        conteo_operaciones = 0
-        wins_totales = 0
-        enviar_telegram(f"🚀 **{BOT_NAME} DE VUELTA ACTIVO**\nBuscando nuevas señales...", ID_VIP)
+    # Verificación de Horarios (Mañana, Tarde, Noche)
+    ahora = datetime.now().hour
+    # Mañana: 8-11 | Tarde: 14-17 | Noche: 20-23
+    en_horario = (8 <= ahora < 11) or (14 <= ahora < 17) or (20 <= ahora < 23)
 
-    for activo in activos:
-        if conteo_operaciones < LIMITE_OPERACIONES:
-            analizar_equilibrado(activo['trading'], activo['display'])
-            time.sleep(5)
+    if en_horario:
+        if conteo_operaciones >= LIMITE_OPERACIONES:
+            hora_regreso = (datetime.now() + timedelta(minutes=30)).strftime('%H:%M')
+            reporte = (f"📊 **SESIÓN FINALIZADA**\n\n✅ Ganadas: {wins_totales}\n"
+                       f"⏳ Pausa de 30 min. Regreso: **{hora_regreso}**\n\n📩 VIP: {LINK_VIP}")
+            enviar_telegram(reporte, ID_VIP)
+            time.sleep(TIEMPO_DESCANSO_SEGUNDOS)
+            conteo_operaciones = 0
+            wins_totales = 0
+            enviar_telegram(f"🚀 **{BOT_NAME} DE VUELTA**\nBuscando señales sensibles...", ID_VIP)
+
+        for activo in activos:
+            if conteo_operaciones < LIMITE_OPERACIONES:
+                analizar_sensible(activo['trading'], activo['display'])
+                time.sleep(5)
+    else:
+        # Si no es hora de operar, espera y avisa en consola
+        time.sleep(600) 
+    
     time.sleep(15)
