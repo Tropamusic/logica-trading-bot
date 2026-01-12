@@ -2,10 +2,11 @@ import time
 import requests
 from tradingview_ta import TA_Handler, Interval
 
-# --- CONFIGURACIÓN ---
+# --- TUS CONFIGURACIONES (SIN CAMBIOS) ---
 TOKEN = "8386038643:AAEngPQbBuu41WBWm7pCYQxm3yEowoJzYaw"
-CHAT_ID = "6717348273" # Tu ID actualizado
-CANAL_BITACORA = "-1003621701961" 
+ID_PERSONAL = "6717348273"      # El ID que tú pusiste
+ID_VIP = "-1002237930838"       # Tu Canal VIP
+ID_BITACORA = "-1003621701961"  # Tu Bitácora
 BOT_NAME = "Lógica Trading 📊"
 
 conteo_operaciones = 0
@@ -16,10 +17,8 @@ TIEMPO_DESCANSO = 3600
 def enviar_telegram(mensaje, destino):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {"chat_id": destino, "text": mensaje, "parse_mode": "Markdown"}
-    try: 
-        requests.post(url, json=payload, timeout=10)
-    except: 
-        pass
+    try: requests.post(url, json=payload, timeout=10)
+    except: pass
 
 def analizar_y_operar(par_trading, par_display):
     global conteo_operaciones, wins_totales
@@ -30,59 +29,58 @@ def analizar_y_operar(par_trading, par_display):
         rsi = analysis.indicators["RSI"]
         precio_entrada = analysis.indicators["close"]
         
-        # --- FASE 1: PRE-AVISO ---
-        if (58 <= rsi < 63) or (42 >= rsi > 37):
-            dir_pre = "VENDER (DOWN) 🔴" if rsi > 50 else "COMPRAR (UP) 🟢"
-            enviar_telegram(f"⚠️ *PREPÁRATE PARA LA SEÑAL EN 2 MINUTOS*\nPair: {par_display}\nOperación: *{dir_pre}*", CHAT_ID)
-            time.sleep(120) 
+        # 1. SEÑAL PARA OPERAR (Se activa con RSI 60/40 o el nivel que prefieras)
+        if (rsi >= 60) or (rsi <= 40):
+            direccion = "BAJA (DOWN) 🔻" if rsi >= 60 else "SUBE (UP) 🟢"
             
-            # --- FASE 2: SEÑAL REAL ---
-            nuevo_rsi = handler.get_analysis().indicators["RSI"]
-            if (nuevo_rsi >= 60) or (nuevo_rsi <= 40):
-                direccion = "🔻 TRADE HACIA ABAJO (DOWN)" if nuevo_rsi >= 60 else "⬆️ TRADE HACIA ARRIBA (UP)"
-                
-                msg = (f"💎 *{BOT_NAME} - SEÑAL VIP*\n"
-                       f"──────────────────\n"
-                       f"Pair: {par_display}\n"
-                       f"Time: 2 min\n\n"
-                       f"{direccion}\n"
-                       f"──────────────────\n"
-                       f"🔥 ¡ENTRA YA AHORA! 🔥")
-                
-                enviar_telegram(msg, CHAT_ID)
-                conteo_operaciones += 1
-                time.sleep(125)
-                
-                # --- FASE 3: RESULTADO ---
-                precio_final = handler.get_analysis().indicators["close"]
-                es_win = (nuevo_rsi >= 60 and precio_final < precio_entrada) or (nuevo_rsi <= 40 and precio_final > precio_entrada)
-                
-                res_msg = f"✅ *WIN - {par_display}* ✅" if es_win else f"❌ *LOSS - {par_display}* ❌"
-                if es_win: wins_totales += 1
-                
-                enviar_telegram(res_msg, CHAT_ID)
-                enviar_telegram(f"📑 *BITÁCORA*\n{res_msg}\nMarcador: {wins_totales}W", CANAL_BITACORA)
-                time.sleep(10)
+            # Formato de Señal Real
+            msg_señal = (f"💎 **{BOT_NAME} - SEÑAL VIP** 💎\n"
+                         f"──────────────────\n"
+                         f"💱 Par: {par_display}\n"
+                         f"⏰ Tiempo: 2 Minutos\n"
+                         f"📈 Operación: **{direccion}**\n"
+                         f"──────────────────\n"
+                         f"🔥 **¡ENTRA YA AHORA!** 🔥")
+            
+            # ENVIAR SEÑAL AL VIP Y A TU ID PERSONAL
+            enviar_telegram(msg_señal, ID_VIP)
+            enviar_telegram(msg_señal, ID_PERSONAL)
+            
+            conteo_operaciones += 1
+            
+            # 2. ESPERA DE LA OPERACIÓN (Aquí el bot espera los 2 min)
+            time.sleep(125)
+            
+            # 3. ENVÍO DEL RESULTADO
+            analisis_final = handler.get_analysis()
+            precio_final = analisis_final.indicators["close"]
+            es_win = (rsi >= 60 and precio_final < precio_entrada) or (rsi <= 40 and precio_final > precio_entrada)
+            
+            res_msg = f"✅ **RESULTADO: WIN**" if es_win else f"❌ **RESULTADO: LOSS**"
+            if es_win: wins_totales += 1
+            
+            enviar_telegram(res_msg, ID_VIP)
+            enviar_telegram(f"📑 *BITÁCORA*: {res_msg}\nMarcador: {wins_totales}W", ID_BITACORA)
+            time.sleep(20) 
+            
     except: pass
 
 # --- INICIO ---
-print(f"🚀 {BOT_NAME} OPERANDO")
-enviar_telegram(f"🌟 *SISTEMA {BOT_NAME.upper()} EN LÍNEA*", CHAT_ID)
+print(f"🚀 {BOT_NAME} Activo con IDs protegidos")
 
 activos = [
-    {"trading": "AUDUSD", "display": "AUD/USD(OTC)"},
     {"trading": "EURUSD", "display": "EUR/USD(OTC)"},
     {"trading": "GBPUSD", "display": "GBP/USD(OTC)"},
-    {"trading": "USDJPY", "display": "USD/JPY(OTC)"}
+    {"trading": "USDJPY", "display": "USD/JPY(OTC)"},
+    {"trading": "AUDUSD", "display": "AUD/USD(OTC)"}
 ]
 
 while True:
     if conteo_operaciones >= LIMITE_OPERACIONES:
-        enviar_telegram(f"📊 *RESUMEN*: {wins_totales} GANADAS\n⏳ Descanso de 1 hora activado.", CHAT_ID)
+        enviar_telegram(f"⏳ **DESCANSO ACTIVADO** (1 Hora)", ID_VIP)
         time.sleep(TIEMPO_DESCANSO)
         conteo_operaciones = 0
         wins_totales = 0
-        enviar_telegram(f"🚀 *{BOT_NAME}* Activo de nuevo.", CHAT_ID)
 
     for activo in activos:
         if conteo_operaciones < LIMITE_OPERACIONES:
