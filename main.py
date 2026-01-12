@@ -1,9 +1,7 @@
 import time
 import requests
-import threading
 from tradingview_ta import TA_Handler, Interval
-import telebot
-from telebot import apihelper
+from datetime import datetime
 
 # --- CONFIGURACIÓN ---
 TOKEN = "8386038643:AAEngPQbBuu41WBWm7pCYQxm3yEowoJzYaw"
@@ -12,89 +10,83 @@ CANAL_BITACORA = "-1003621701961"
 LINK_CANAL_PRINCIPAL = "https://t.me/+4bqyiiDGXTA4ZTRh" 
 BOT_NAME = "Lógica Trading 📊"
 
-# Evita colisiones de hilos
-apihelper.SESSION_ITER_SIZE = 50 
-bot = telebot.TeleBot(TOKEN, threaded=False) # Desactivamos hilos en el polling para evitar el 409
-
-def enviar_mensaje(id_chat, texto):
+def enviar_telegram(mensaje, canal_id):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    payload = {
+        "chat_id": canal_id, 
+        "text": mensaje, 
+        "parse_mode": "Markdown",
+        "reply_markup": {"inline_keyboard": [[{"text": "📥 UNIRSE AL VIP", "url": LINK_CANAL_PRINCIPAL}]]}
+    }
     try:
-        markup = telebot.types.InlineKeyboardMarkup()
-        markup.add(telebot.types.InlineKeyboardButton("📥 ENTRAR AL BROKER", url=LINK_CANAL_PRINCIPAL))
-        bot.send_message(id_chat, texto, parse_mode="Markdown", reply_markup=markup)
-    except: pass
+        requests.post(url, json=payload, timeout=10)
+    except:
+        pass
 
-def analizar():
-    wins, loss, racha = 0, 0, 0
-    # Espera un momento a que el polling inicie
-    time.sleep(5)
-    enviar_mensaje(CANAL_VIP, f"✅ **{BOT_NAME} RECONECTADO**\n\nBuscando señales ganadoras cada 2 minutos... 📡")
+def obtener_analisis(simbolo):
+    try:
+        handler = TA_Handler(
+            symbol=simbolo,
+            exchange="FX_IDC",
+            screener="forex",
+            interval=Interval.INTERVAL_1_MINUTE
+        )
+        analysis = handler.get_analysis()
+        return analysis.indicators["RSI"], analysis.indicators["close"]
+    except:
+        return None, None
 
-    while True:
-        # Lista de pares para asegurar que SIEMPRE haya una señal cerca
-        activos = [
-            {"t": "EURUSD", "d": "EUR/USD (OTC)"},
-            {"t": "GBPUSD", "d": "GBP/USD (OTC)"},
-            {"t": "AUDUSD", "d": "AUD/USD (OTC)"},
-            {"t": "USDJPY", "d": "USD/JPY (OTC)"},
-            {"t": "EURJPY", "d": "EUR/JPY (OTC)"},
-            {"t": "GBPJPY", "d": "GBP/JPY (OTC)"}
-        ]
+# --- INICIO DEL BOT ---
+print(f"🚀 {BOT_NAME} Iniciado correctamente...")
+enviar_telegram(f"✅ **{BOT_NAME} ACTIVADO**\n\nAnalizando mercado real... 📡\nBuscando señales ganadoras cada 2 minutos.", CANAL_VIP)
 
-        for activo in activos:
-            try:
-                handler = TA_Handler(symbol=activo["t"], exchange="FX_IDC", screener="forex", interval=Interval.INTERVAL_1_MINUTE)
-                analysis = handler.get_analysis()
-                rsi = analysis.indicators["RSI"]
-                precio_e = analysis.indicators["close"]
+wins, loss = 0, 0
 
-                # Lógica de alta probabilidad (36/64)
-                if rsi >= 64 or rsi <= 36:
-                    direccion = "BAJA (DOWN) 🔻" if rsi >= 64 else "SUBE (UP) 🟢"
-                    
-                    enviar_mensaje(CANAL_VIP, f"💎 **SEÑAL CONFIRMADA** 💎\n\n💱 Par: {activo['d']}\n🎯 Acción: **{direccion}**\n⏱ Tiempo: 2 Minutos\n📊 RSI: {rsi:.2f}\n\n🔥 **¡ENTRAR YA!** 🔥")
-                    
-                    time.sleep(125) # Duración de la operación
-                    
-                    final = handler.get_analysis().indicators["close"]
-                    es_win = (rsi >= 64 and final < precio_e) or (rsi <= 36 and final > precio_e)
+while True:
+    # Lista de pares
+    activos = [
+        {"t": "EURUSD", "d": "EUR/USD (OTC)"},
+        {"t": "GBPUSD", "d": "GBP/USD (OTC)"},
+        {"t": "AUDUSD", "d": "AUD/USD (OTC)"},
+        {"t": "USDJPY", "d": "USD/JPY (OTC)"}
+    ]
 
-                    if es_win:
-                        wins += 1
-                        racha += 1
-                        res_txt = f"✅ **WIN GANADA ✅**\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
-                        if racha >= 3:
-                            enviar_mensaje(CANAL_VIP, f"💰 **¡RACHA DE {racha} GANADAS!** 💰")
-                    else:
-                        loss += 1
-                        racha = 0
-                        res_txt = f"❌ **LOSS PERDIDA ❌**\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
-                    
-                    enviar_mensaje(CANAL_VIP, res_txt)
-                    enviar_mensaje(CANAL_BITACORA, f"📑 **BITÁCORA**\n{res_txt}")
-                    time.sleep(2)
-                    break 
+    for activo in activos:
+        rsi, precio_entrada = obtener_analisis(activo["t"])
+        
+        if rsi:
+            # SEÑAL DE VENTA (DOWN)
+            if rsi >= 64:
+                enviar_telegram(f"💎 **SEÑAL VIP** 💎\n\n💱 Par: {activo['d']}\n🔻 Operación: **BAJA (DOWN)**\n⏱ Tiempo: 2 Minutos\n📊 RSI: {rsi:.2f}\n\n¡ENTRAR YA! 🔥", CANAL_VIP)
+                
+                time.sleep(125) # Espera de la operación
+                
+                _, precio_final = obtener_analisis(activo["t"])
+                if precio_final and precio_final < precio_entrada:
+                    wins += 1
+                    res = f"✅ **WIN GANADA** ✅\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
+                else:
+                    loss += 1
+                    res = f"❌ **LOSS PERDIDA** ❌\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
+                
+                enviar_telegram(res, CANAL_VIP)
+                enviar_telegram(f"📑 *BITÁCORA*\n{res}", CANAL_BITACORA)
 
-            except Exception as e:
-                print(f"Error analizando {activo['t']}: {e}")
-                continue
-        time.sleep(10)
+            # SEÑAL DE COMPRA (UP)
+            elif rsi <= 36:
+                enviar_telegram(f"💎 **SEÑAL VIP** 💎\n\n💱 Par: {activo['d']}\n🟢 Operación: **SUBE (UP)**\n⏱ Tiempo: 2 Minutos\n📈 RSI: {rsi:.2f}\n\n¡ENTRAR YA! 🔥", CANAL_VIP)
+                
+                time.sleep(125)
+                
+                _, precio_final = obtener_analisis(activo["t"])
+                if precio_final and precio_final > precio_entrada:
+                    wins += 1
+                    res = f"✅ **WIN GANADA** ✅\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
+                else:
+                    loss += 1
+                    res = f"❌ **LOSS PERDIDA** ❌\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
+                
+                enviar_telegram(res, CANAL_VIP)
+                enviar_telegram(f"📑 *BITÁCORA*\n{res}", CANAL_BITACORA)
 
-# --- EJECUCIÓN CON LIMPIEZA DE WEBHOOKS ---
-if __name__ == "__main__":
-    # 1. Quitar cualquier conexión previa
-    bot.remove_webhook()
-    time.sleep(2)
-    
-    # 2. Iniciar análisis en hilo aparte
-    t = threading.Thread(target=analizar)
-    t.daemon = True
-    t.start()
-    
-    # 3. Polling infinito con reconexión automática
-    print("Bot activo...")
-    while True:
-        try:
-            bot.polling(none_stop=True, interval=0, timeout=20)
-        except Exception as e:
-            print(f"Conflicto detectado: {e}. Reiniciando en 5s...")
-            time.sleep(5)
+    time.sleep(15) # Escaneo constante
