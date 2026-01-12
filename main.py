@@ -6,11 +6,18 @@ from tradingview_ta import TA_Handler, Interval
 TOKEN = "8386038643:AAEngPQbBuu41WBWm7pCYQxm3yEowoJzYaw"
 CANAL_VIP = "-1002237930838"  
 CANAL_BITACORA = "-1003621701961" 
-LINK_CANAL_PRINCIPAL = "https://t.me/+4bqyiiDGXTA4ZTRh"
+LINK_CANAL_PRINCIPAL = "https://t.me/+4bqyiiDGXTA4ZTRh" 
 
-def enviar_telegram(mensaje, canal_id):
+def enviar_telegram(mensaje, canal_id, con_boton=True):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {"chat_id": canal_id, "text": mensaje, "parse_mode": "Markdown"}
+    payload = {
+        "chat_id": canal_id, 
+        "text": mensaje, 
+        "parse_mode": "Markdown"
+    }
+    if con_boton:
+        payload["reply_markup"] = {"inline_keyboard": [[{"text": "📥 ENTRAR AL BROKER", "url": LINK_CANAL_PRINCIPAL}]]}
+    
     try:
         requests.post(url, json=payload, timeout=10)
     except:
@@ -18,23 +25,28 @@ def enviar_telegram(mensaje, canal_id):
 
 def obtener_analisis(simbolo):
     try:
-        handler = TA_Handler(symbol=simbolo, exchange="FX_IDC", screener="forex", interval=Interval.INTERVAL_1_MINUTE)
+        handler = TA_Handler(
+            symbol=simbolo,
+            exchange="FX_IDC",
+            screener="forex",
+            interval=Interval.INTERVAL_1_MINUTE
+        )
         analysis = handler.get_analysis()
         return analysis.indicators["RSI"], analysis.indicators["close"]
     except:
         return None, None
 
-# --- LÓGICA DE OPERACIÓN ---
-print("🚀 Bot Iniciado: Replicando formato de señales...")
+# --- INICIO DEL BOT ---
+print("🚀 Bot de Señales Activo...")
 
 while True:
-    enviar_telegram("📡 **Analizando mercado en tiempo real para todos los brokers...**", CANAL_VIP)
+    # Mensaje de inicio de jornada
+    enviar_telegram("📡 **Buscando señales de alta precisión en TradingView...**", CANAL_VIP, False)
     
     contador_ciclo = 0
     wins, loss = 0, 0
 
     while contador_ciclo < 4:
-        # Pares para rotación rápida
         activos = ["EURUSD", "GBPUSD", "AUDUSD", "USDJPY"]
         
         for par in activos:
@@ -42,49 +54,40 @@ while True:
             
             rsi, precio_entrada = obtener_analisis(par)
             
-            if rsi:
-                # 1. DETECCIÓN DE PRE-AVISO (RSI acercándose a extremos)
-                if (rsi >= 58 and rsi < 60) or (rsi <= 42 and rsi > 40):
-                    accion_pre = "COMPRAR (UP) 🟢" if rsi <= 42 else "VENDER (DOWN) 🔴"
-                    enviar_telegram(f"⚠️ **LÓGICA TRADING: PRE-AVISO**\nPair: {par}(OTC)\nAcción: **{accion_pre}**\nPrepárate en tu broker...", CANAL_VIP)
-                    time.sleep(10) # Tiempo para que el usuario abra el broker
+            # Ajustamos el RSI para que dispare señales cada 2 minutos aproximadamente
+            if rsi and (rsi >= 60 or rsi <= 40):
+                direccion = "BAJA (DOWN) 🔻" if rsi >= 60 else "SUBE (UP) 🟢"
+                
+                # --- PASO 1: ENVIAR LA SEÑAL DE OPERACIÓN (ESTO ES LO QUE TE FALTABA) ---
+                mensaje_entrada = (f"💎 **SEÑAL VIP CONFIRMADA** 💎\n\n"
+                                   f"💱 Par: {par} (OTC)\n"
+                                   f"🎯 Acción: **{direccion}**\n"
+                                   f"⏱ Tiempo: 2 Minutos\n"
+                                   f"📊 RSI: {rsi:.2f}\n\n"
+                                   f"🔥 **¡ENTRA YA AHORA!** 🔥")
+                
+                enviar_telegram(mensaje_entrada, CANAL_VIP)
+                
+                # --- PASO 2: ESPERAR LOS 2 MINUTOS DE LA OPERACIÓN ---
+                time.sleep(125) 
+                
+                # --- PASO 3: VERIFICAR Y ENVIAR RESULTADO ---
+                _, precio_final = obtener_analisis(par)
+                if (rsi >= 60 and precio_final < precio_entrada) or (rsi <= 40 and precio_final > precio_entrada):
+                    wins += 1
+                    res = f"✅ **RESULTADO: WIN** ✅\nPar: {par}\n¡Operación ganada con éxito!"
+                else:
+                    loss += 1
+                    res = f"❌ **RESULTADO: LOSS** ❌\nPar: {par}\nMarcador actual: {wins}W - {loss}L"
+                
+                enviar_telegram(res, CANAL_VIP)
+                enviar_telegram(f"📑 *REGISTRO BITÁCORA*\n{res}", CANAL_BITACORA)
+                
+                contador_ciclo += 1
+                time.sleep(15) # Pausa pequeña para la siguiente señal
 
-                # 2. SEÑAL VIP (Nivel confirmado)
-                if rsi >= 60 or rsi <= 40:
-                    direccion = "TRADE DOWN (BAJA) 🔻" if rsi >= 60 else "TRADE UP (SUBE) 🟢"
-                    
-                    # ENVIAR SEÑAL VIP (Como en el capture)
-                    mensaje_vip = (f"💎 **Lógica Trading 📊 - SEÑAL VIP**\n"
-                                   f"──────────────────\n"
-                                   f"💱 Pair: {par}(OTC)\n"
-                                   f"⏰ Tiempo: 2 Minutos\n"
-                                   f"📈 Operación: **{direccion}**\n"
-                                   f"──────────────────\n"
-                                   f"Válido para cualquier Broker")
-                    enviar_telegram(mensaje_vip, CANAL_VIP)
-                    
-                    # 3. ESPERA DE OPERACIÓN
-                    time.sleep(125) 
-                    
-                    # 4. RESULTADO
-                    _, precio_final = obtener_analisis(par)
-                    es_win = (rsi >= 60 and precio_final < precio_entrada) or (rsi <= 40 and precio_final > precio_entrada)
-                    
-                    if es_win:
-                        wins += 1
-                        res_msg = f"✅ **RESULTADO: WIN** ✅\n{par}(OTC) - ¡Operación Exitosa!"
-                    else:
-                        loss += 1
-                        res_msg = f"❌ **RESULTADO: LOSS** ❌\n{par}(OTC) - Intenta la próxima."
-                    
-                    enviar_telegram(res_msg, CANAL_VIP)
-                    enviar_telegram(f"📑 *BITÁCORA*\n{res_msg}\nMarcador: {wins}W - {loss}L", CANAL_BITACORA)
-                    
-                    contador_ciclo += 1
-                    time.sleep(30) # Pausa entre señales para no saturar
+        time.sleep(20) # Escaneo constante si no hay señales
 
-        time.sleep(15)
-
-    # --- DESCANSO DE 1 HORA ---
-    enviar_telegram(f"⏳ **SESIÓN FINALIZADA**\n\nSe cumplieron las 4 operaciones. Descanso de seguridad de **1 HORA** activado.", CANAL_VIP)
+    # --- PASO 4: DESCANSO DE 1 HORA ---
+    enviar_telegram(f"⏳ **SESIÓN FINALIZADA**\n\nCompletamos 4 operaciones. El bot descansará **1 HORA** para seguridad.\nMarcador: {wins}W - {loss}L", CANAL_VIP, False)
     time.sleep(3600)
