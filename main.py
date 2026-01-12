@@ -23,53 +23,65 @@ aviso_enviado = False
 def enviar_telegram(mensaje, destino):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {"chat_id": destino, "text": mensaje, "parse_mode": "Markdown", "disable_web_page_preview": True}
-    try: requests.post(url, json=payload, timeout=10)
-    except: pass
+    try: 
+        requests.post(url, json=payload, timeout=10)
+    except: 
+        pass
 
 def analizar_y_operar(par_trading, par_display):
     global conteo_operaciones, wins_totales
+    
     handler = TA_Handler(symbol=par_trading, exchange="FX_IDC", screener="forex", interval=Interval.INTERVAL_1_MINUTE)
+    
     try:
         analysis = handler.get_analysis()
         rsi = analysis.indicators["RSI"]
         precio_entrada = analysis.indicators["close"]
         
-        # SENSIBILIDAD AJUSTADA PARA PRUEBA (58/42)
-        es_venta = rsi >= 58
-        es_compra = rsi <= 42
+        # SENSIBILIDAD 60/40
+        es_venta = rsi >= 60
+        es_compra = rsi <= 40
 
         if es_compra or es_venta:
+            # --- 🛑 BLOQUEO DE SEGURIDAD INMEDIATO 🛑 ---
+            # Aumentamos el contador ANTES de enviar el mensaje para que el bucle se detenga
+            conteo_operaciones += 1
+            
             direccion = "BAJA (DOWN) 🔻" if es_venta else "SUBE (UP) 🟢"
             msg = (f"💎 **{BOT_NAME} - SEÑAL VIP** 💎\n"
                    f"──────────────────\n"
                    f"💱 Par: {par_display}\n"
                    f"⏰ Tiempo: 2 Minutos\n"
                    f"📈 Operación: **{direccion}**\n"
-                   f"🎯 Broker: POCKET OPTION / QUOTEX\n"
+                   f"🎯 Broker: TODOS\n"
                    f"──────────────────\n"
                    f"🔥 **¡ENTRA YA AHORA!** 🔥")
+            
             enviar_telegram(msg, ID_VIP)
             enviar_telegram(msg, ID_PERSONAL)
-            conteo_operaciones += 1
+            
+            # --- ESPERA TOTAL ---
+            # El bot se queda aquí "congelado" 125 segundos. No puede enviar duplicados.
             time.sleep(125) 
+            
+            # Verificación de resultado
             p_final = handler.get_analysis().indicators["close"]
             win = (es_venta and p_final < precio_entrada) or (es_compra and p_final > precio_entrada)
+            
             res_msg = "✅ **OPERACIÓN GANADORA** ✅" if win else "❌ **RESULTADO: LOSS** ❌"
             if win: wins_totales += 1
+            
             enviar_telegram(res_msg, ID_VIP)
             enviar_telegram(f"📑 *BITÁCORA*: {res_msg}\n📊 {par_display} | E: {precio_entrada:.5f} -> S: {p_final:.5f}", ID_BITACORA)
-            time.sleep(30)
+            
+            # Pausa extra de 10 segundos para limpiar la señal de la memoria
+            time.sleep(10)
             return True 
-    except: pass
+    except: 
+        pass
     return False
 
-# --- DIAGNÓSTICO INICIAL ---
-ahora_check = datetime.now(MI_ZONA_HORARIA)
-status_msg = (f"✅ **BOT REINICIADO**\n"
-              f"🕒 Hora detectada: {ahora_check.strftime('%I:%M %p')}\n"
-              f"📊 Estado: {'OPERANDO' if (8 <= ahora_check.hour < 11) or (14 <= ahora_check.hour < 17) or (20 <= ahora_check.hour < 23) else 'MODO ESPERA'}")
-enviar_telegram(status_msg, ID_PERSONAL)
-
+# --- ACTIVOS ---
 activos = [
     {"trading": "EURUSD", "display": "EUR/USD"},
     {"trading": "GBPUSD", "display": "GBP/USD"},
@@ -78,18 +90,15 @@ activos = [
     {"trading": "EURJPY", "display": "EUR/JPY"}
 ]
 
+# --- DIAGNÓSTICO AL PRENDER ---
+enviar_telegram(f"✅ **SISTEMA ACTUALIZADO**\nBloqueo de duplicados activado.", ID_PERSONAL)
+
 while True:
     ahora_vzla = datetime.now(MI_ZONA_HORARIA)
     hora = ahora_vzla.hour
     minuto = ahora_vzla.minute
 
-    # Aviso 5 min antes
-    if (hora in [7, 13, 19]) and (minuto == 55) and not aviso_enviado:
-        enviar_telegram(f"⏳ **¡PREPÁRENSE! 5 MINUTOS...**\nLa sesión de {BOT_NAME} está por iniciar. 🚀", ID_VIP)
-        aviso_enviado = True
-    if minuto == 0: aviso_enviado = False
-
-    # Horario Operativo
+    # Horario Operativo: 8-11, 14-17, 20-23
     es_hora_operativa = (8 <= hora < 11) or (14 <= hora < 17) or (20 <= hora < 23)
 
     if es_hora_operativa:
@@ -100,9 +109,11 @@ while True:
             conteo_operaciones = 0
             wins_totales = 0
         else:
+            # Escanea uno por uno y SIEMPRE rompe el ciclo después de una operación
             for activo in activos:
-                if conteo_operaciones >= LIMITE_OPERACIONES: break
-                if analizar_y_operar(activo['trading'], activo['display']): break
-                time.sleep(5)
+                if conteo_operaciones < LIMITE_OPERACIONES:
+                    if analizar_y_operar(activo['trading'], activo['display']):
+                        break # Sale del for y vuelve a empezar el escaneo
+                time.sleep(7) # Pausa de 7 segundos entre activos para evitar spam
     else:
         time.sleep(60)
