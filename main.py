@@ -3,10 +3,15 @@ import requests
 from tradingview_ta import TA_Handler, Interval
 from datetime import datetime
 
-# --- CONFIGURACIÓN DE CANALES ---
+# --- CONFIGURACIÓN DE IDENTIFICADORES ---
 TOKEN = "8386038643:AAEngPQbBuu41WBWm7pCYQxm3yEowoJzYaw"
-CANAL_PRINCIPAL = "-1002237930838"  
-CANAL_RESULTADOS = "-1003621701961" 
+
+# Canal donde se envían las SEÑALES (ENTRA YA)
+CANAL_VIP = "-1002237930838"  
+
+# Canal donde se envían los RESULTADOS (WIN/LOSS)
+CANAL_BITACORA = "-1003621701961" 
+
 LINK_CANAL_PRINCIPAL = "https://t.me/+4bqyiiDGXTA4ZTRh" 
 BOT_NAME = "Lógica Trading 📊"
 
@@ -35,7 +40,8 @@ def obtener_analisis(simbolo):
 
 # --- INICIO AUTOMÁTICO AL GUARDAR ---
 print(f"🚀 {BOT_NAME} Iniciado correctamente...")
-enviar_telegram(f"🔔 **SISTEMA ACTIVADO**\n\nConectado a TradingView. Escaneando pares en tiempo real... 📡", CANAL_PRINCIPAL)
+# Aviso de activación al canal VIP
+enviar_telegram(f"✅ **{BOT_NAME} ACTIVADO**\n\nAnalizando mercado real en TradingView... 📡\nBuscando las mejores señales VIP.", CANAL_VIP)
 
 wins, loss = 0, 0
 
@@ -52,38 +58,41 @@ while True:
         rsi, precio_entrada = obtener_analisis(activo["t"])
         
         if rsi:
-            # LÓGICA DE VENTA (DOWN)
+            # --- LÓGICA DE VENTA (DOWN) ---
             if rsi >= 64:
-                enviar_telegram(f"💎 **SEÑAL DE ENTRADA**\n\n💱 Par: {activo['d']}\n🔻 Operación: **BAJA (DOWN)**\n⏱ Tiempo: 2 Minutos\n📈 RSI: {rsi:.2f}\n\n¡ENTRA YA! 🔥", CANAL_PRINCIPAL)
+                # 1. Envía la señal al canal VIP
+                enviar_telegram(f"💎 **SEÑAL VIP** 💎\n\n💱 Par: {activo['d']}\n🔻 Operación: **BAJA (DOWN)**\n⏱ Tiempo: 2 Minutos\n📉 RSI: {rsi:.2f}\n\n¡ENTRA YA! 🔥", CANAL_VIP)
                 
-                time.sleep(125) # Tiempo de la operación
+                time.sleep(125) # Espera el tiempo de la operación (2 min)
                 
                 _, precio_final = obtener_analisis(activo["t"])
-                if precio_final < precio_entrada:
+                if precio_final and precio_final < precio_entrada:
                     wins += 1
                     res_msg = f"✅ **RESULTADO: WIN** ✅\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
                 else:
                     loss += 1
                     res_msg = f"❌ **RESULTADO: LOSS** ❌\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
                 
-                enviar_telegram(res_msg, CANAL_PRINCIPAL)
-                enviar_telegram(f"📑 **BITÁCORA**\n{res_msg}", CANAL_RESULTADOS)
+                # 2. Envía el resultado a ambos para transparencia
+                enviar_telegram(res_msg, CANAL_VIP)
+                enviar_telegram(f"📑 *REGISTRO DE BITÁCORA*\n{res_msg}", CANAL_BITACORA)
 
-            # LÓGICA DE COMPRA (UP)
+            # --- LÓGICA DE COMPRA (UP) ---
             elif rsi <= 36:
-                enviar_telegram(f"💎 **SEÑAL DE ENTRADA**\n\n💱 Par: {activo['d']}\n🟢 Operación: **SUBE (UP)**\n⏱ Tiempo: 2 Minutos\n📉 RSI: {rsi:.2f}\n\n¡ENTRA YA! 🔥", CANAL_PRINCIPAL)
+                # 1. Envía la señal al canal VIP
+                enviar_telegram(f"💎 **SEÑAL VIP** 💎\n\n💱 Par: {activo['d']}\n🟢 Operación: **SUBE (UP)**\n⏱ Tiempo: 2 Minutos\n📈 RSI: {rsi:.2f}\n\n¡ENTRA YA! 🔥", CANAL_VIP)
                 
                 time.sleep(125)
                 
                 _, precio_final = obtener_analisis(activo["t"])
-                if precio_final > precio_entrada:
+                if precio_final and precio_final > precio_entrada:
                     wins += 1
                     res_msg = f"✅ **RESULTADO: WIN** ✅\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
                 else:
                     loss += 1
                     res_msg = f"❌ **RESULTADO: LOSS** ❌\nPar: {activo['d']}\nMarcador: {wins}W - {loss}L"
                 
-                enviar_telegram(res_msg, CANAL_PRINCIPAL)
-                enviar_telegram(f"📑 **BITÁCORA**\n{res_msg}", CANAL_RESULTADOS)
+                enviar_telegram(res_msg, CANAL_VIP)
+                enviar_telegram(f"📑 *REGISTRO DE BITÁCORA*\n{res_msg}", CANAL_BITACORA)
 
-    time.sleep(10) # Frecuencia de escaneo
+    time.sleep(10) # Pausa de escaneo para no saturar
