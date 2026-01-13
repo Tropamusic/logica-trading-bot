@@ -22,9 +22,9 @@ def enviar_telegram(mensaje, destino):
     try: requests.post(url, json=payload, timeout=10)
     except: pass
 
-# --- LISTA MAESTRA DE ACTIVOS (FOREX + ORO) ---
+# --- LISTA DE ACTIVOS REALES (MERCADO ABIERTO) ---
 activos = [
-    {"trading": "XAUUSD", "display": "ORO (XAU/USD) ✨"}, # ¡Añadido!
+    {"trading": "XAUUSD", "display": "ORO (XAU/USD) ✨"},
     {"trading": "EURUSD", "display": "EUR/USD"},
     {"trading": "GBPUSD", "display": "GBP/USD"},
     {"trading": "USDJPY", "display": "USD/JPY"},
@@ -39,62 +39,69 @@ activos = [
     {"trading": "EURAUD", "display": "EUR/AUD"}
 ]
 
-print(f"🚀 {BOT_NAME} Iniciado con {len(activos)} activos.")
+print(f"🚀 {BOT_NAME} en modo DINERO REAL iniciado.")
 
-# --- BUCLE DE ANÁLISIS TOTAL ---
+# --- BUCLE PRINCIPAL ---
 while True:
-    # Aviso de "Bot Activo" cada 10 minutos si no hay señales
+    ahora = datetime.now(MI_ZONA_HORARIA)
+    
+    # 1. CONTROL DE FIN DE SEMANA (CIERRE VIERNES 5PM - APERTURA DOMINGO 5PM)
+    # 4 = Viernes, 5 = Sábado, 6 = Domingo
+    dia_semana = ahora.weekday()
+    hora = ahora.hour
+
+    if (dia_semana == 4 and hora >= 17) or (dia_semana == 5) or (dia_semana == 6 and hora < 17):
+        if ahora.minute == 0 and ahora.second < 10: # Solo avisa una vez al inicio del cierre
+            enviar_telegram("🔒 **Lógica Trading - Mercado Cerrado**\nEl mercado real ha cerrado por fin de semana. El bot entrará en pausa para evitar el riesgo del OTC. ¡Nos vemos el domingo por la noche!", ID_PERSONAL)
+        time.sleep(3600) # Espera una hora para volver a chequear
+        continue
+
+    # 2. AVISO DE ACTIVIDAD (CADA 10 MIN SIN SEÑALES)
     tiempo_actual = time.time()
-    if (tiempo_actual - ultima_senal_time) >= 600: # 600 segundos = 10 min
-        enviar_telegram("🔍 **Lógica Trading Informa:** Sigo analizando los mercados en tiempo real. Esperando el punto exacto 60/40...", ID_PERSONAL)
+    if (tiempo_actual - ultima_senal_time) >= 600:
+        enviar_telegram("🔍 **Lógica Trading Informa:** Analizando mercado REAL. Esperando el punto 60/40 exacto para asegurar la entrada...", ID_PERSONAL)
         ultima_senal_time = tiempo_actual
 
+    # 3. ANÁLISIS DE ACTIVOS
     for activo in activos:
         try:
-            handler = TA_Handler(
-                symbol=activo['trading'], 
-                exchange="FX_IDC", 
-                screener="forex", 
-                interval=Interval.INTERVAL_1_MINUTE
-            )
+            handler = TA_Handler(symbol=activo['trading'], exchange="FX_IDC", screener="forex", interval=Interval.INTERVAL_1_MINUTE)
             analysis = handler.get_analysis()
             rsi = analysis.indicators["RSI"]
             precio_entrada = analysis.indicators["close"]
             
-            # PRECISIÓN 60/40
+            # FILTRO DE MÁXIMA PRECISIÓN 60/40
             es_venta = 60 <= rsi <= 65
             es_compra = 35 <= rsi <= 40
             
             if es_venta or es_compra:
                 conteo_alertas += 1
-                ultima_senal_time = time.time() # Reinicia el cronómetro de inactividad
+                ultima_senal_time = time.time()
                 direccion = "BAJA (DOWN) 🔻" if es_venta else "SUBE (UP) 🟢"
                 
-                msg = (f"🎯 **SEÑAL DE PRECISIÓN #{conteo_alertas}**\n"
+                msg = (f"🎯 **SEÑAL REAL DE PRECISIÓN #{conteo_alertas}**\n"
                        f"──────────────────\n"
                        f"💱 Par: **{activo['display']}**\n"
                        f"📈 Operación: **{direccion}**\n"
-                       f"📊 RSI actual: **{round(rsi, 2)}**\n"
+                       f"📊 RSI: **{round(rsi, 2)}**\n"
                        f"⏰ Tiempo: 2 Minutos\n"
                        f"──────────────────\n"
                        f"📢 **Lógica Trading: ¡Nivel confirmado!**")
                 enviar_telegram(msg, ID_PERSONAL)
                 
-                time.sleep(125) # Expiración de 2 min
+                time.sleep(125) # Espera resultado
                 
                 check = handler.get_analysis()
                 precio_final = check.indicators["close"]
                 ganada = (es_venta and precio_final < precio_entrada) or (es_compra and precio_final > precio_entrada)
                 
                 if ganada:
-                    res_txt = f"✅ **¡WIN! EN {activo['display']}** ✅\n🔥 *Lógica Trading: Operación Exitosa.*"
+                    res_txt = f"✅ **¡WIN! MERCADO REAL** ✅\n💰 Par: {activo['display']}\n🔥 *Lógica Trading: Análisis cumplido.*"
                 else:
-                    res_txt = f"❌ **RESULTADO: LOSS** ❌\n📊 Par: {activo['display']}\nMercado volátil. Buscando la siguiente..."
+                    res_txt = f"❌ **RESULTADO: LOSS** ❌\n📊 Par: {activo['display']}\nEl mercado es soberano. Seguimos con disciplina."
                 
                 enviar_telegram(res_txt, ID_PERSONAL)
-                
-                # Pausa de 5 min para tranquilidad del canal
-                time.sleep(300) 
+                time.sleep(300) # Pausa de seguridad
                 
         except: continue
     time.sleep(1)
