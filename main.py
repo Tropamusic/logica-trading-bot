@@ -60,7 +60,7 @@ while True:
 
     # 2. ANÁLISIS DE ACTIVOS CON LÓGICA DE PRE-AVISO
     for activo in activos:
-        try:
+                try:
             handler = TA_Handler(
                 symbol=activo['trading'], 
                 exchange="FX_IDC", 
@@ -69,68 +69,47 @@ while True:
             )
             analysis = handler.get_analysis()
             rsi = analysis.indicators["RSI"]
-            
             simbolo = activo['trading']
 
-            # --- LÓGICA PARA VENTAS (DOWN) ---
-            # Pre-aviso entre 58 y 60
-            if 58 <= rsi < 60 and estado_activos[simbolo] != 'preaviso_down':
-                msg_pre = (f"⚠️ **[PRE-AVISO] Lógica Trading**\n"
-                           f"──────────────────\n"
-                           f"💱 Par: **{activo['display']}**\n"
-                           f"📉 Operación: **Posible VENTA (BAJA)**\n"
-                           f"📊 RSI actual: {round(rsi, 2)}\n"
-                           f"📢 *Ten listo el broker...*")
-                enviar_telegram(msg_pre, ID_PERSONAL)
+            # --- LÓGICA OPTIMIZADA 58/42 ---
+
+            # VENTAS (DOWN)
+            if 56 <= rsi < 58 and estado_activos[simbolo] != 'preaviso_down':
+                enviar_telegram(f"⚠️ **[PRE-AVISO]** {activo['display']} cerca de nivel 58 (Venta).", ID_PERSONAL)
                 estado_activos[simbolo] = 'preaviso_down'
 
-            # Señal final en 60 o más
-            elif rsi >= 60 and estado_activos[simbolo] == 'preaviso_down':
+            elif rsi >= 58 and estado_activos[simbolo] == 'preaviso_down':
                 conteo_alertas += 1
-                msg_final = (f"🚀 **¡ENTRADA AHORA!** (Señal #{conteo_alertas})\n"
-                             f"──────────────────\n"
-                             f"💎 Par: **{activo['display']}**\n"
-                             f"🔻 Dirección: **BAJA (DOWN)**\n"
-                             f"⏳ Tiempo: **2 MINUTOS**\n"
-                             f"🎯 RSI: {round(rsi, 2)}\n"
-                             f"──────────────────\n"
-                             f"✅ *Copia y pega en el Canal VIP.*")
-                enviar_telegram(msg_final, ID_PERSONAL)
-                estado_activos[simbolo] = 'operado'
-                time.sleep(125) # Espera a que pase la operación para ese activo
-
-            # --- LÓGICA PARA COMPRAS (UP) ---
-            # Pre-aviso entre 40 y 42
-            elif 40 < rsi <= 42 and estado_activos[simbolo] != 'preaviso_up':
-                msg_pre = (f"⚠️ **[PRE-AVISO] Lógica Trading**\n"
-                           f"──────────────────\n"
-                           f"💱 Par: **{activo['display']}**\n"
-                           f"🟢 Operación: **Posible COMPRA (SUBE)**\n"
-                           f"📊 RSI actual: {round(rsi, 2)}\n"
-                           f"📢 *Ten listo el broker...*")
-                enviar_telegram(msg_pre, ID_PERSONAL)
-                estado_activos[simbolo] = 'preaviso_up'
-
-            # Señal final en 40 o menos
-            elif rsi <= 40 and estado_activos[simbolo] == 'preaviso_up':
-                conteo_alertas += 1
-                msg_final = (f"🚀 **¡ENTRADA AHORA!** (Señal #{conteo_alertas})\n"
-                             f"──────────────────\n"
-                             f"💎 Par: **{activo['display']}**\n"
-                             f"🟢 Dirección: **SUBE (UP)**\n"
-                             f"⏳ Tiempo: **2 MINUTOS**\n"
-                             f"🎯 RSI: {round(rsi, 2)}\n"
-                             f"──────────────────\n"
-                             f"✅ *Copia y pega en el Canal VIP.*")
-                enviar_telegram(msg_final, ID_PERSONAL)
+                msg = (f"🚀 **¡ENTRADA AHORA!** (#{conteo_alertas})\n"
+                       f"💎 Par: **{activo['display']}**\n"
+                       f"🔻 Dirección: **BAJA (DOWN)**\n"
+                       f"⏳ Tiempo: **2 MINUTOS**\n"
+                       f"🎯 RSI: {round(rsi, 2)}")
+                enviar_telegram(msg, ID_PERSONAL)
                 estado_activos[simbolo] = 'operado'
                 time.sleep(125)
 
-            # Resetear estado si el RSI vuelve a zona neutral (entre 45 y 55)
-            elif 45 < rsi < 55:
+            # COMPRAS (UP)
+            elif 42 < rsi <= 44 and estado_activos[simbolo] != 'preaviso_up':
+                enviar_telegram(f"⚠️ **[PRE-AVISO]** {activo['display']} cerca de nivel 42 (Compra).", ID_PERSONAL)
+                estado_activos[simbolo] = 'preaviso_up'
+
+            elif rsi <= 42 and estado_activos[simbolo] == 'preaviso_up':
+                conteo_alertas += 1
+                msg = (f"🚀 **¡ENTRADA AHORA!** (#{conteo_alertas})\n"
+                       f"💎 Par: **{activo['display']}**\n"
+                       f"🟢 Dirección: **SUBE (UP)**\n"
+                       f"⏳ Tiempo: **2 MINUTOS**\n"
+                       f"🎯 RSI: {round(rsi, 2)}")
+                enviar_telegram(msg, ID_PERSONAL)
+                estado_activos[simbolo] = 'operado'
+                time.sleep(125)
+
+            # Zona neutral para resetear
+            elif 46 < rsi < 54:
                 estado_activos[simbolo] = 'esperando'
 
-        except Exception as e:
-            continue
+        except: continue
+
             
     time.sleep(1)
