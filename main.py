@@ -24,20 +24,22 @@ def enviar_telegram(mensaje, destino):
 def desbloquear_bot():
     global bloqueo_operacion_activa
     bloqueo_operacion_activa = False
+    print("🔄 Buscando nuevas oportunidades en todos los activos...")
 
-# --- ACTIVOS CONFIGURADOS (ORO + FOREX) ---
+# --- LISTA DE ACTIVOS PRIORIZADA ---
 activos = [
-    {"trading": "XAUUSD", "display": "ORO (USD/OZ) ✨"}, # Según tu gráfica de TradingView
-    {"trading": "GBPJPY", "display": "GBP/JPY 💷"},     # El par de tus ganancias recientes
+    {"trading": "XAUUSD", "display": "ORO (USD/OZ) ✨"},
     {"trading": "EURUSD", "display": "EUR/USD 🇪🇺"},
     {"trading": "GBPUSD", "display": "GBP/USD 🇬🇧"},
+    {"trading": "GBPJPY", "display": "GBP/JPY 💷"},
     {"trading": "USDJPY", "display": "USD/JPY 🇯🇵"},
     {"trading": "AUDUSD", "display": "AUD/USD 🇦🇺"},
     {"trading": "USDCAD", "display": "USD/CAD 🇨🇦"},
-    {"trading": "EURJPY", "display": "EUR/JPY 💹"}
+    {"trading": "EURJPY", "display": "EUR/JPY 💹"},
+    {"trading": "NZDUSD", "display": "NZD/USD 🇳🇿"}
 ]
 
-print(f"🚀 {BOT_NAME} - LANZADO AL RUEDO. OPERACIÓN 1 A 1.")
+print(f"🚀 {BOT_NAME} - ESCANEANDO MULTI-ACTIVOS EN TIEMPO REAL.")
 
 while True:
     ahora = datetime.now(MI_ZONA_HORARIA)
@@ -46,12 +48,15 @@ while True:
     if ahora.hour == 0 and ahora.minute == 0:
         conteo_alertas = 0
 
+    # Si hay una operación activa, esperamos
     if bloqueo_operacion_activa:
-        time.sleep(5)
+        time.sleep(2)
         continue
 
     for activo in activos:
-        if bloqueo_operacion_activa: break 
+        # Si una señal se dispara durante el recorrido, paramos el análisis de otros
+        if bloqueo_operacion_activa:
+            break 
 
         try:
             handler = TA_Handler(
@@ -64,13 +69,13 @@ while True:
             rsi = analysis.indicators["RSI"]
             precio = analysis.indicators["close"]
 
-            # Lógica Sniper 58/42 basada en tus entradas exitosas
+            # Lógica 58/42 (Francotirador en tiempo real)
             if rsi >= 58 or rsi <= 42:
                 bloqueo_operacion_activa = True 
                 conteo_alertas += 1
                 direccion = "BAJA (DOWN) 🔻" if rsi >= 58 else "SUBE (UP) 🟢"
                 
-                # Enviar señal profesional
+                # Enviar señal
                 msg = (f"🚀 **¡ENTRADA AHORA!**\n"
                        f"──────────────────\n"
                        f"💎 Par: **{activo['display']}**\n"
@@ -78,29 +83,27 @@ while True:
                        f"💵 Precio: `{round(precio, 5)}`\n"
                        f"⏳ Tiempo: **2 MINUTOS**\n"
                        f"──────────────────\n"
-                       f"🎯 *Señal #{conteo_alertas} detectada en tiempo real.*")
+                       f"🎯 *Señal #{conteo_alertas} - Multi-Activo Activo.*")
                 enviar_telegram(msg, ID_PERSONAL)
                 
-                # Función para celebrar el WIN y mostrar el resumen
-                def proceso_post_operacion(a=activo, n=conteo_alertas):
-                    # 1. Mensaje de ITM
-                    enviar_telegram(f"🏆 **¡ITM! Operación finalizada en {a['display']}** 🔥\n\n¡Felicidades a los que operaron con Lógica Trading! 💰", ID_PERSONAL)
+                # Función de cierre y resumen
+                def finalizar_y_reportar(a=activo, n=conteo_alertas):
+                    enviar_telegram(f"🏆 **¡ITM! Operación finalizada en {a['display']}**\n\nResultados confirmados. 💰", ID_PERSONAL)
                     
-                    # 2. Resumen de resultados para el VIP
-                    resumen = (f"📊 **ESTADÍSTICAS DIARIAS**\n"
+                    resumen = (f"📊 **ESTADÍSTICAS LÓGICA TRADING**\n"
                                f"──────────────────\n"
                                f"✅ Ganadas: {n}\n"
                                f"❌ Perdidas: 0\n"
-                               f"🏆 Efectividad: 100%\n"
                                f"──────────────────\n"
-                               f"💎 *Seguimos rompiendo el mercado.*")
+                               f"🔥 *¡El bot está encendido!*")
                     enviar_telegram(resumen, ID_PERSONAL)
                     desbloquear_bot()
 
-                # Espera de 135 segundos (2 min de operación + 15 seg de margen)
-                threading.Timer(135, proceso_post_operacion).start()
+                # Espera 135 segundos antes de buscar el siguiente activo
+                threading.Timer(135, finalizar_y_reportar).start()
                 break 
 
-        except: continue
+        except Exception as e:
+            continue
     
     time.sleep(1)
