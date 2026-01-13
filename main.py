@@ -1,5 +1,6 @@
 import time
 import requests
+import threading
 from datetime import datetime
 import pytz 
 from tradingview_ta import TA_Handler, Interval
@@ -19,7 +20,7 @@ def enviar_telegram(mensaje, destino):
     try: requests.post(url, json=payload, timeout=10)
     except: pass
 
-# --- LISTA DE ACTIVOS REALES (MERCADO ABIERTO + ORO) ---
+# --- LISTA DE ACTIVOS (INCLUYENDO ORO USD/OZ) ---
 activos = [
     {"trading": "XAUUSD", "display": "ORO (USD/OZ) ✨"},
     {"trading": "EURUSD", "display": "EUR/USD"},
@@ -39,9 +40,8 @@ activos = [
 for a in activos:
     estado_activos[a['trading']] = 'esperando'
 
-print(f"🚀 {BOT_NAME} - MODO SEÑALES ACTIVAS iniciado.")
+print(f"🚀 {BOT_NAME} - MODO SNIPER (45/55) iniciado.")
 
-# --- BUCLE DE ACCIÓN TOTAL ---
 while True:
     ahora = datetime.now(MI_ZONA_HORARIA)
     
@@ -53,7 +53,6 @@ while True:
 
     for activo in activos:
         try:
-            # Análisis en tiempo real (1 Minuto)
             handler = TA_Handler(
                 symbol=activo['trading'], 
                 exchange="FX_IDC", 
@@ -64,48 +63,37 @@ while True:
             rsi = analysis.indicators["RSI"]
             simbolo = activo['trading']
 
-            # --- SEÑALES DE VENTA (BAJA) ---
-            # Si el RSI toca 58 o más, dispara señal
-            if rsi >= 58 and estado_activos[simbolo] != 'operado':
+            # --- LÓGICA SNIPER VENTAS (DOWN) EN 55 ---
+            # El "Sniper" solo dispara si está entre 55 y 58 (Zona de agotamiento temprano)
+            if 55 <= rsi <= 58 and estado_activos[simbolo] == 'esperando':
                 conteo_alertas += 1
-                tipo = "🔥 FUERZA MÁXIMA" if rsi > 63 else "🚀 ENTRADA AHORA"
-                
-                msg = (f"{tipo} (#{conteo_alertas})\n"
+                msg = (f"🎯 **SEÑAL SNIPER: BAJA (DOWN)**\n"
                        f"──────────────────\n"
                        f"💎 Par: **{activo['display']}**\n"
-                       f"🔻 Dirección: **BAJA (DOWN)**\n"
+                       f"📊 RSI actual: {round(rsi, 2)}\n"
                        f"⏳ Tiempo: **2 MINUTOS**\n"
-                       f"🎯 RSI: {round(rsi, 2)}\n"
                        f"──────────────────\n"
-                       f"✅ *Señal detectada. Envía al canal.*")
+                       f"✅ *Nivel 55 confirmado. Revisa y envía.*")
                 enviar_telegram(msg, ID_PERSONAL)
                 estado_activos[simbolo] = 'operado'
-                # Espera corta para que no repita la misma vela pero siga analizando otros
-                threading.Timer(120, lambda: estado_activos.update({simbolo: 'esperando'})).start()
+                # Bloqueo largo de 5 minutos para no saturar con el mismo par
+                threading.Timer(300, lambda s=simbolo: estado_activos.update({s: 'esperando'})).start()
 
-            # --- SEÑALES DE COMPRA (SUBE) ---
-            # Si el RSI toca 42 o menos, dispara señal
-            elif rsi <= 42 and estado_activos[simbolo] != 'operado':
+            # --- LÓGICA SNIPER COMPRAS (UP) EN 45 ---
+            # El "Sniper" solo dispara si está entre 42 y 45 (Zona de rebote temprano)
+            elif 42 <= rsi <= 45 and estado_activos[simbolo] == 'esperando':
                 conteo_alertas += 1
-                tipo = "🔥 FUERZA MÁXIMA" if rsi < 37 else "🚀 ENTRADA AHORA"
-                
-                msg = (f"{tipo} (#{conteo_alertas})\n"
+                msg = (f"🎯 **SEÑAL SNIPER: SUBE (UP)**\n"
                        f"──────────────────\n"
                        f"💎 Par: **{activo['display']}**\n"
-                       f"🟢 Dirección: **SUBE (UP)**\n"
+                       f"📊 RSI actual: {round(rsi, 2)}\n"
                        f"⏳ Tiempo: **2 MINUTOS**\n"
-                       f"🎯 RSI: {round(rsi, 2)}\n"
                        f"──────────────────\n"
-                       f"✅ *Señal detectada. Envía al canal.*")
+                       f"✅ *Nivel 45 confirmado. Revisa y envía.*")
                 enviar_telegram(msg, ID_PERSONAL)
                 estado_activos[simbolo] = 'operado'
-                threading.Timer(120, lambda: estado_activos.update({simbolo: 'esperando'})).start()
-
-            # Resetear estado si el precio sale de la zona de señal
-            elif 45 < rsi < 55:
-                estado_activos[simbolo] = 'esperando'
+                threading.Timer(300, lambda s=simbolo: estado_activos.update({s: 'esperando'})).start()
 
         except: continue
     
-    # Escaneo ultra rápido de toda la lista
-    time.sleep(0.5) 
+    time.sleep(2) # Escaneo más pausado para precisión
