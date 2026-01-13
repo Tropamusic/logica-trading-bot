@@ -23,7 +23,7 @@ def enviar_telegram(mensaje, destino):
     try: requests.post(url, json=payload, timeout=10)
     except: pass
 
-# --- BUCLE DE ANÁLISIS PROFESIONAL ---
+# --- BUCLE DE ANÁLISIS DE PRECISIÓN ---
 while True:
     if conteo_alertas < LIMITE_ALERTAS:
         activos = [
@@ -42,54 +42,50 @@ while True:
                 rsi = analysis.indicators["RSI"]
                 precio_entrada = analysis.indicators["close"]
                 
-                # NIVELES DE SEGURIDAD PARA DINERO REAL (60/40)
-                es_venta = rsi >= 60  
-                es_compra = rsi <= 40 
+                # AJUSTE DE PRECISIÓN: Solo entra si está entre 60-65 o 35-40
+                # Esto evita señales cuando el RSI ya se disparó a 70+ o bajó de 30
+                es_venta = 60 <= rsi <= 65
+                es_compra = 35 <= rsi <= 40
                 
                 if es_venta or es_compra:
                     conteo_alertas += 1
                     direccion = "BAJA (DOWN) 🔻" if es_venta else "SUBE (UP) 🟢"
                     
-                    # Mensaje de Entrada
-                    msg = (f"⚠️  **NUEVA SEÑAL #{conteo_alertas} / {LIMITE_ALERTAS}** ⚠️\n"
+                    # Mensaje Profesional
+                    msg = (f"🎯 **SEÑAL DE PRECISIÓN #{conteo_alertas}**\n"
                            f"──────────────────\n"
                            f"💱 Par: **{activo['display']}**\n"
                            f"📈 Operación: **{direccion}**\n"
+                           f"📊 RSI actual: **{round(rsi, 2)}**\n"
                            f"⏰ Tiempo: 2 Minutos\n"
                            f"──────────────────\n"
-                           f"📢 **Opera con responsabilidad. Gestión de riesgo activa.**")
+                           f"📢 **Entra justo ahora. ¡Nivel 60/40 alcanzado!**")
                     enviar_telegram(msg, ID_PERSONAL)
                     
-                    # Espera de operación (2 min)
-                    time.sleep(125) 
+                    time.sleep(125) # Espera 2 min
                     
-                    # Verificación de Resultado
+                    # Verificación
                     check = handler.get_analysis()
                     precio_final = check.indicators["close"]
                     ganada = (es_venta and precio_final < precio_entrada) or (es_compra and precio_final > precio_entrada)
                     
                     if ganada:
-                        res_msg = f"✅ **RESULTADO: ¡WIN!** ✅\n💰 Par: {activo['display']}\n🔥 *¡Sube tu captura al VIP, Lógica Trading!*"
+                        res_msg = f"✅ **¡WIN! NIVEL RESPETADO** ✅\n💰 Par: {activo['display']}\n🔥 *Lógica Trading: Precisión total.*"
                     else:
-                        res_msg = f"❌ **RESULTADO: LOSS** ❌\n📊 Par: {activo['display']}\nTranquilo, la disciplina es la clave del éxito."
+                        res_msg = f"❌ **RESULTADO: LOSS** ❌\n📊 Par: {activo['display']}\nEl mercado rompió el nivel. Seguimos con gestión."
                     
                     enviar_telegram(res_msg, ID_PERSONAL)
                     
                     if conteo_alertas < LIMITE_ALERTAS:
-                        time.sleep(300) # 5 min entre alertas
+                        time.sleep(300) 
                     
             except: continue
-            time.sleep(2)
+            time.sleep(1) # Escaneo más rápido para no perder el "toque"
     else:
-        # --- DESCANSO Y PRE-AVISO ---
+        # Lógica de descanso de 30 min (con pre-aviso de 5 min)
         reinicio_dt = datetime.now(MI_ZONA_HORARIA) + timedelta(minutes=TIEMPO_DESCANSO_MINUTOS)
-        reinicio_str = reinicio_dt.strftime('%I:%M %p')
-        
-        enviar_telegram(f"😴 **BLOQUE COMPLETADO**\nSesión cerrada con {LIMITE_ALERTAS} alertas.\nRegresamos a las: **{reinicio_str}**", ID_PERSONAL)
-        
-        time.sleep(1500) # Espera 25 min
-        
-        enviar_telegram(f"⏳ **¡PREPARADOS!**\nFaltan **5 MINUTOS** para el próximo bloque de Lógica Trading. Abran sus brokers.", ID_PERSONAL)
-        
-        time.sleep(300) # Espera 5 min finales
-        conteo_alertas = 0 
+        enviar_telegram(f"😴 **SESIÓN COMPLETADA**\nRegresamos a las: **{reinicio_dt.strftime('%I:%M %p')}**", ID_PERSONAL)
+        time.sleep(1500) 
+        enviar_telegram(f"⏳ **¡PRE-ALERTA!**\nEn **5 MINUTOS** iniciamos nuevas señales de precisión.", ID_PERSONAL)
+        time.sleep(300)
+        conteo_alertas = 0
