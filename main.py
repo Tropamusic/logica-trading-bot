@@ -8,7 +8,7 @@ from tradingview_ta import TA_Handler, Interval
 # --- DATOS DE LÓGICA TRADING ---
 TOKEN = "8386038643:AAEngPQbBuu41WBWm7pCYQxm3yEowoJzYaw"
 ID_PERSONAL = "6717348273"
-LINK_VIP = "https://t.me/+tYm_D39iB8YxZDRh"
+LINK_VIP = "https://t.me/+4bqyiiDGXTA4ZTRh"
 BOT_NAME = "Lógica Trading 📊"
 
 MI_ZONA_HORARIA = pytz.timezone('America/Caracas') 
