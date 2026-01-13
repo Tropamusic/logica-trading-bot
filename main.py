@@ -5,25 +5,25 @@ from datetime import datetime
 import pytz 
 from tradingview_ta import TA_Handler, Interval
 
-# --- DATOS DE LÓGICA TRADING ---
+# --- DATOS DE CONFIGURACIÓN ---
 TOKEN = "8386038643:AAEngPQbBuu41WBWm7pCYQxm3yEowoJzYaw"
 ID_PERSONAL = "6717348273"
-LINK_VIP = "https://t.me/+4bqyiiDGXTA4ZTRh"
 BOT_NAME = "Lógica Trading 📊"
-
 MI_ZONA_HORARIA = pytz.timezone('America/Caracas') 
 
+# --- VARIABLES DE CONTROL ---
 conteo_alertas = 0
-# Diccionario para controlar el estado de cada activo y evitar spam de pre-avisos
 estado_activos = {}
 
 def enviar_telegram(mensaje, destino):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {"chat_id": destino, "text": mensaje, "parse_mode": "Markdown"}
-    try: requests.post(url, json=payload, timeout=10)
-    except: pass
+    try:
+        requests.post(url, json=payload, timeout=10)
+    except:
+        pass
 
-# --- LISTA COMPLETA DE ACTIVOS REALES + ORO ---
+# --- LISTA DE ACTIVOS (MERCADO REAL + ORO) ---
 activos = [
     {"trading": "XAUUSD", "display": "ORO (XAU/USD) ✨"},
     {"trading": "EURUSD", "display": "EUR/USD"},
@@ -40,17 +40,17 @@ activos = [
     {"trading": "EURAUD", "display": "EUR/AUD"}
 ]
 
-# Inicializar estados
+# Inicializar estados de los activos
 for a in activos:
     estado_activos[a['trading']] = 'esperando'
 
-print(f"🚀 {BOT_NAME} - ASISTENTE PERSONAL (Modo Pre-Aviso) iniciado.")
+print(f"🚀 {BOT_NAME} iniciado con estrategia 58/42 (Modo Asistente)")
 
 # --- BUCLE PRINCIPAL ---
 while True:
     ahora = datetime.now(MI_ZONA_HORARIA)
     
-    # 1. CONTROL DE FIN DE SEMANA
+    # 1. CONTROL DE FIN DE SEMANA (CIERRE REAL)
     dia_semana = ahora.weekday()
     hora_actual = ahora.hour
 
@@ -58,9 +58,9 @@ while True:
         time.sleep(3600)
         continue
 
-    # 2. ANÁLISIS DE ACTIVOS CON LÓGICA DE PRE-AVISO
+    # 2. ANÁLISIS DE MERCADO
     for activo in activos:
-                try:
+        try:
             handler = TA_Handler(
                 symbol=activo['trading'], 
                 exchange="FX_IDC", 
@@ -71,45 +71,61 @@ while True:
             rsi = analysis.indicators["RSI"]
             simbolo = activo['trading']
 
-            # --- LÓGICA OPTIMIZADA 58/42 ---
-
-            # VENTAS (DOWN)
+            # --- LÓGICA DE VENTAS (Nivel 58) ---
             if 56 <= rsi < 58 and estado_activos[simbolo] != 'preaviso_down':
-                enviar_telegram(f"⚠️ **[PRE-AVISO]** {activo['display']} cerca de nivel 58 (Venta).", ID_PERSONAL)
+                msg_pre = (f"⚠️ **[PRE-AVISO] Lógica Trading**\n"
+                           f"──────────────────\n"
+                           f"💱 Par: **{activo['display']}**\n"
+                           f"📉 Operación: **Posible VENTA**\n"
+                           f"📊 RSI: {round(rsi, 2)}\n"
+                           f"📢 *Prepara el mensaje para el VIP...*")
+                enviar_telegram(msg_pre, ID_PERSONAL)
                 estado_activos[simbolo] = 'preaviso_down'
 
             elif rsi >= 58 and estado_activos[simbolo] == 'preaviso_down':
                 conteo_alertas += 1
-                msg = (f"🚀 **¡ENTRADA AHORA!** (#{conteo_alertas})\n"
-                       f"💎 Par: **{activo['display']}**\n"
-                       f"🔻 Dirección: **BAJA (DOWN)**\n"
-                       f"⏳ Tiempo: **2 MINUTOS**\n"
-                       f"🎯 RSI: {round(rsi, 2)}")
-                enviar_telegram(msg, ID_PERSONAL)
+                msg_final = (f"🚀 **¡ENTRADA AHORA!** (Señal #{conteo_alertas})\n"
+                             f"──────────────────\n"
+                             f"💎 Par: **{activo['display']}**\n"
+                             f"🔻 Dirección: **BAJA (DOWN)**\n"
+                             f"⏳ Tiempo: **2 MINUTOS**\n"
+                             f"🎯 RSI: {round(rsi, 2)}\n"
+                             f"──────────────────\n"
+                             f"✅ *Copia y envía al canal.*")
+                enviar_telegram(msg_final, ID_PERSONAL)
                 estado_activos[simbolo] = 'operado'
-                time.sleep(125)
+                time.sleep(125) # Pausa para finalizar la operación
 
-            # COMPRAS (UP)
+            # --- LÓGICA DE COMPRAS (Nivel 42) ---
             elif 42 < rsi <= 44 and estado_activos[simbolo] != 'preaviso_up':
-                enviar_telegram(f"⚠️ **[PRE-AVISO]** {activo['display']} cerca de nivel 42 (Compra).", ID_PERSONAL)
+                msg_pre = (f"⚠️ **[PRE-AVISO] Lógica Trading**\n"
+                           f"──────────────────\n"
+                           f"💱 Par: **{activo['display']}**\n"
+                           f"🟢 Operación: **Posible COMPRA**\n"
+                           f"📊 RSI: {round(rsi, 2)}\n"
+                           f"📢 *Prepara el mensaje para el VIP...*")
+                enviar_telegram(msg_pre, ID_PERSONAL)
                 estado_activos[simbolo] = 'preaviso_up'
 
             elif rsi <= 42 and estado_activos[simbolo] == 'preaviso_up':
                 conteo_alertas += 1
-                msg = (f"🚀 **¡ENTRADA AHORA!** (#{conteo_alertas})\n"
-                       f"💎 Par: **{activo['display']}**\n"
-                       f"🟢 Dirección: **SUBE (UP)**\n"
-                       f"⏳ Tiempo: **2 MINUTOS**\n"
-                       f"🎯 RSI: {round(rsi, 2)}")
-                enviar_telegram(msg, ID_PERSONAL)
+                msg_final = (f"🚀 **¡ENTRADA AHORA!** (Señal #{conteo_alertas})\n"
+                             f"──────────────────\n"
+                             f"💎 Par: **{activo['display']}**\n"
+                             f"🟢 Dirección: **SUBE (UP)**\n"
+                             f"⏳ Tiempo: **2 MINUTOS**\n"
+                             f"🎯 RSI: {round(rsi, 2)}\n"
+                             f"──────────────────\n"
+                             f"✅ *Copia y envía al canal.*")
+                enviar_telegram(msg_final, ID_PERSONAL)
                 estado_activos[simbolo] = 'operado'
                 time.sleep(125)
 
-            # Zona neutral para resetear
+            # --- RESETEAR ESTADO ---
             elif 46 < rsi < 54:
                 estado_activos[simbolo] = 'esperando'
 
-        except: continue
-
+        except:
+            continue
             
-    time.sleep(1)
+    time.sleep(1) # Escaneo constante
