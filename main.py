@@ -78,7 +78,7 @@ while True:
                            f"💱 Par: **{activo['display']}**\n"
                            f"📉 Operación: **Posible VENTA**\n"
                            f"📊 RSI: {round(rsi, 2)}\n"
-                           f"📢 *Prepara el mensaje para el VIP...*")
+                           f"📢 *Ten listo el broker...*")
                 enviar_telegram(msg_pre, ID_PERSONAL)
                 estado_activos[simbolo] = 'preaviso_down'
 
@@ -103,7 +103,7 @@ while True:
                            f"💱 Par: **{activo['display']}**\n"
                            f"🟢 Operación: **Posible COMPRA**\n"
                            f"📊 RSI: {round(rsi, 2)}\n"
-                           f"📢 *Prepara el mensaje para el VIP...*")
+                           f"📢 *Ten listo el broker...*")
                 enviar_telegram(msg_pre, ID_PERSONAL)
                 estado_activos[simbolo] = 'preaviso_up'
 
