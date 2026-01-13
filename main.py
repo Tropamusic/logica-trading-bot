@@ -88,7 +88,7 @@ while True:
                 
                 # Función de cierre y resumen
                 def finalizar_y_reportar(a=activo, n=conteo_alertas):
-                    enviar_telegram(f"🏆 **¡ITM! Operación finalizada en {a['display']}**\n\n¡Felicidades a los que operaron con Lógica Trading! 💰", ID_PERSONAL)
+                    enviar_telegram(f"🏆 **¡ITM! Operación finalizada en {a['display']}**\n\nResultados confirmados. 💰", ID_PERSONAL)
                     
                     resumen = (f"📊 **ESTADÍSTICAS LÓGICA TRADING**\n"
                                f"──────────────────\n"
