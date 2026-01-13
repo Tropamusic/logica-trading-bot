@@ -11,14 +11,20 @@ ID_PERSONAL = "6717348273"
 BOT_NAME = "Lógica Trading 📊"
 MI_ZONA_HORARIA = pytz.timezone('America/Caracas') 
 
+# --- VARIABLES DE CONTROL ---
 conteo_alertas = 0
-estado_activos = {}
+bloqueo_operacion_activa = False # Nueva llave de seguridad
 
 def enviar_telegram(mensaje, destino):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {"chat_id": destino, "text": mensaje, "parse_mode": "Markdown"}
     try: requests.post(url, json=payload, timeout=10)
     except: pass
+
+def desbloquear_bot():
+    global bloqueo_operacion_activa
+    bloqueo_operacion_activa = False
+    print("🔄 Bot desbloqueado. Buscando nueva señal...")
 
 # --- ACTIVOS MONITOREADOS ---
 activos = [
@@ -32,62 +38,48 @@ activos = [
     {"trading": "EURJPY", "display": "EUR/JPY 💹"}
 ]
 
-for a in activos:
-    estado_activos[a['trading']] = 'esperando'
-
-print(f"🚀 {BOT_NAME} - BUSCANDO WINNERS EN TIEMPO REAL.")
+print(f"🚀 {BOT_NAME} - MODO ORDENADO ACTIVADO (1 señal a la vez).")
 
 while True:
+    # Si hay una operación en curso, el bot no analiza nada
+    if bloqueo_operacion_activa:
+        time.sleep(5)
+        continue
+
     for activo in activos:
+        # Si durante el bucle se activa una señal, dejamos de buscar otros activos
+        if bloqueo_operacion_activa: break 
+
         try:
-            handler = TA_Handler(
-                symbol=activo['trading'], 
-                exchange="FX_IDC", 
-                screener="forex", 
-                interval=Interval.INTERVAL_1_MINUTE
-            )
+            handler = TA_Handler(symbol=activo['trading'], exchange="FX_IDC", screener="forex", interval=Interval.INTERVAL_1_MINUTE)
             analysis = handler.get_analysis()
             rsi = analysis.indicators["RSI"]
             precio = analysis.indicators["close"]
-            simbolo = activo['trading']
 
-            # --- SEÑAL DE VENTA ---
-            if rsi >= 58 and estado_activos[simbolo] == 'esperando':
+            # --- LÓGICA DE SEÑAL SNIPER ---
+            if rsi >= 58 or rsi <= 42:
+                bloqueo_operacion_activa = True # BLOQUEO TOTAL
                 conteo_alertas += 1
+                direccion = "BAJA (DOWN) 🔻" if rsi >= 58 else "SUBE (UP) 🟢"
+                
+                # 1. Enviar la señal única
                 msg = (f"🚀 **¡ENTRADA AHORA!**\n"
                        f"──────────────────\n"
                        f"💎 Par: **{activo['display']}**\n"
-                       f"🔻 Operación: **BAJA (DOWN)**\n"
+                       f"📈 Operación: **{direccion}**\n"
+                       f"💵 Precio: `{round(precio, 5)}`\n"
                        f"⏳ Tiempo: **2 MINUTOS**\n"
-                       f"🎯 RSI: {round(rsi, 2)}\n"
                        f"──────────────────\n"
-                       f"✅ *¡Reenvía al VIP y prepárate para el WIN!*")
+                       f"🎯 *Señal #{conteo_alertas}. Concentración total.*")
                 enviar_telegram(msg, ID_PERSONAL)
                 
-                # Mensaje de apoyo para celebrar (aparece 2 min después)
-                threading.Timer(125, lambda a=activo: enviar_telegram(f"🏆 **¡ITM - WIN EN {a['display']}!** 🔥\n\n¡Felicidades a los que la tomaron! 💰💰", ID_PERSONAL)).start()
-                
-                estado_activos[simbolo] = 'operado'
-                threading.Timer(130, lambda s=simbolo: estado_activos.update({s: 'esperando'})).start()
+                # 2. Programar el mensaje de WIN y el desbloqueo (135 segundos = 2min 15s)
+                def finalizar_operacion(a=activo, n=conteo_alertas):
+                    enviar_telegram(f"🏆 **¡ITM! Operación finalizada en {a['display']}**\n\n¿Cómo les fue? ¡Manden sus capturas! 💰", ID_PERSONAL)
+                    desbloquear_bot()
 
-            # --- SEÑAL DE COMPRA ---
-            elif rsi <= 42 and estado_activos[simbolo] == 'esperando':
-                conteo_alertas += 1
-                msg = (f"🚀 **¡ENTRADA AHORA!**\n"
-                       f"──────────────────\n"
-                       f"💎 Par: **{activo['display']}**\n"
-                       f"🟢 Operación: **SUBE (UP)**\n"
-                       f"⏳ Tiempo: **2 MINUTOS**\n"
-                       f"🎯 RSI: {round(rsi, 2)}\n"
-                       f"──────────────────\n"
-                       f"✅ *¡Reenvía al VIP y prepárate para el WIN!*")
-                enviar_telegram(msg, ID_PERSONAL)
-                
-                # Mensaje de apoyo para celebrar (aparece 2 min después)
-                threading.Timer(125, lambda a=activo: enviar_telegram(f"🏆 **¡ITM - WIN EN {a['display']}!** 🔥\n\n¡Felicidades a los que la tomaron! 💰💰", ID_PERSONAL)).start()
-                
-                estado_activos[simbolo] = 'operado'
-                threading.Timer(130, lambda s=simbolo: estado_activos.update({s: 'esperando'})).start()
+                threading.Timer(135, finalizar_operacion).start()
+                break # Salimos del for para esperar el desbloqueo
 
         except: continue
     
