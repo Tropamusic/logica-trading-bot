@@ -9,68 +9,72 @@ ID_PERSONAL = "6717348273"
 
 bloqueo = False
 
+# Activos seleccionados para Mercado Real
+activos = [
+    {"symbol": "XAUUSD", "ex": "OANDA", "n": "ORO ✨"},
+    {"symbol": "EURUSD", "ex": "FX_IDC", "n": "EUR/USD 🇪🇺"},
+    {"symbol": "GBPUSD", "ex": "FX_IDC", "n": "GBP/USD 🇬🇧"},
+    {"symbol": "USDJPY", "ex": "FX_IDC", "n": "USD/JPY 🇯🇵"}
+]
+
 def enviar_telegram(mensaje):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {
-        "chat_id": ID_PERSONAL,
-        "text": mensaje,
-        "parse_mode": "Markdown"
-    }
     try:
-        requests.post(url, json=payload, timeout=10)
+        requests.post(url, json={"chat_id": ID_PERSONAL, "text": mensaje, "parse_mode": "Markdown"}, timeout=10)
     except:
-        print("⚠️ Error de conexión con Telegram.")
+        pass
 
 def desbloquear():
     global bloqueo
     bloqueo = False
-    print("🔄 Sistema listo. Escaneando Mercado Real...")
+    print("✅ Pausa terminada. Buscando nuevas oportunidades...")
 
-# Configuración Sniper para ORO (Mercado Real OANDA)
-oro = TA_Handler(
-    symbol="XAUUSD",
-    exchange="OANDA",
-    screener="forex",
-    interval=Interval.INTERVAL_1_MINUTE
-)
-
-print("🚀 LÓGICA TRADING ACTIVADA")
-print("🔱 Bot operando en ORO (RSI 58/42)")
-print("🛡️ Seguridad: Bloqueo de 2 min tras señal.")
+print("🚀 MULTI-BOT LÓGICA TRADING ACTIVADO")
+print("📡 Monitoreando: Oro, EURUSD, GBPUSD, USDJPY")
 
 while True:
     if bloqueo:
-        time.sleep(5)
+        time.sleep(10)
         continue
 
-    try:
-        # Analizamos TradingView
-        analisis = oro.get_analysis()
-        rsi = analisis.indicators["RSI"]
-        precio = analisis.indicators["close"]
+    for a in activos:
+        if bloqueo: break # Si sale señal en uno, deja de buscar en los otros
         
-        print(f"📊 ORO: ${precio} | RSI: {round(rsi, 2)}")
+        try:
+            handler = TA_Handler(
+                symbol=a['symbol'], exchange=a['ex'],
+                screener="forex", interval=Interval.INTERVAL_1_MINUTE
+            )
+            analisis = handler.get_analysis()
+            rsi = analisis.indicators["RSI"]
+            
+            print(f"📊 {a['n']}: RSI {round(rsi, 2)}")
 
-        # Lógica de señales LuxAlgo
-        if rsi >= 58.0 or rsi <= 42.0:
-            bloqueo = True
-            direccion = "BAJA (DOWN) 🔻" if rsi >= 58.0 else "SUBE (UP) 🟢"
+            # Lógica LuxAlgo 58/42
+            if rsi >= 58.0 or rsi <= 42.0:
+                bloqueo = True
+                dir_msg = "BAJA (DOWN) 🔻" if rsi >= 58.0 else "SUBE (UP) 🟢"
+                
+                msg = (f"🔔 **¡SEÑAL ENCONTRADA!**\n"
+                       f"──────────────────\n"
+                       f"💎 Activo: **{a['n']}**\n"
+                       f"📈 Operación: **{dir_msg}**\n"
+                       f"📊 RSI: `{round(rsi, 2)}`\n"
+                       f"⏳ Pausa: **2 MINUTOS**\n"
+                       f"──────────────────\n"
+                       f"🎯 *¡Entra ahora en Pocket Option!*")
+                
+                enviar_telegram(msg)
+                # Tu regla de los 2 minutos de experiencia
+                threading.Timer(120, desbloquear).start()
             
-            msg = (f"🔱 **ORO: SEÑAL DE ALTA PRECISIÓN**\n"
-                   f"──────────────────\n"
-                   f"📈 Operación: **{direccion}**\n"
-                   f"📊 RSI Real: `{round(rsi, 2)}`\n"
-                   f"💵 Precio: `${precio}`\n"
-                   f"⏳ Pausa de Seguridad: **2 MINUTOS**\n"
-                   f"──────────────────\n"
-                   f"🎯 *Lógica Trading: Opera solo en Mercado Real.*")
-            
-            enviar_telegram(msg)
-            
-            # Aplicamos tu instrucción de los 2 minutos de experiencia
-            threading.Timer(120, desbloquear).start()
+            # Pequeña pausa entre activos para no saturar la API
+            time.sleep(3) 
 
-    except Exception as e:
-        print(f"📡 Buscando señal estable... ({e})")
-    
-    time.sleep(2)
+        except Exception as e:
+            if "429" in str(e):
+                print("⚠️ Límite de API. Esperando enfriamiento...")
+                time.sleep(20)
+            continue
+
+    time.sleep(5) # Pausa antes de la siguiente vuelta completa
