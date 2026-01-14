@@ -4,80 +4,73 @@ import threading
 from tradingview_ta import TA_Handler, Interval
 
 # --- DATOS DE LÓGICA TRADING ---
-TOKEN = "8386038643:AAEngPQbBuu41WBWm7pCYQxm3yEowoJzYaw"
+TOKEN = "8596292166:AAHL3VHIZOS1rKh9NsteznCcbHoOdtnIK90" 
 ID_PERSONAL = "6717348273"
-
-# LISTA COMPLETA DE ACTIVOS (Mercado Real)
-activos = [
-    {"symbol": "XAUUSD", "ex": "OANDA", "n": "ORO ✨", "scr": "forex"},
-    {"symbol": "BTCUSD", "ex": "BITSTAMP", "n": "BITCOIN ₿", "scr": "crypto"},
-    {"symbol": "USOIL", "ex": "TVC", "n": "PETRÓLEO 🛢️", "scr": "cfd"},
-    {"symbol": "EURUSD", "ex": "FX_IDC", "n": "EUR/USD 🇪🇺", "scr": "forex"},
-    {"symbol": "GBPUSD", "ex": "FX_IDC", "n": "GBP/USD 🇬🇧", "scr": "forex"},
-    {"symbol": "GBPJPY", "ex": "FX_IDC", "n": "GBP/JPY 💷", "scr": "forex"},
-    {"symbol": "USDJPY", "ex": "FX_IDC", "n": "USD/JPY 🇯🇵", "scr": "forex"}
-]
 
 bloqueo = False
 
-def enviar(msg):
+def enviar_telegram(mensaje):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    payload = {
+        "chat_id": ID_PERSONAL,
+        "text": mensaje,
+        "parse_mode": "Markdown"
+    }
     try:
-        requests.post(url, json={"chat_id": ID_PERSONAL, "text": msg, "parse_mode": "Markdown"}, timeout=10)
+        requests.post(url, json=payload, timeout=10)
     except:
-        pass
+        print("⚠️ Error de conexión con Telegram.")
 
-print("🚀 LÓGICA TRADING: Volviendo al RSI Clásico (58/42)")
-print("📡 Escaneo directo activado. Sin filtros adicionales.")
+def desbloquear():
+    global bloqueo
+    bloqueo = False
+    print("🔄 Sistema listo. Escaneando Mercado Real...")
+
+# Configuración Sniper para ORO (Mercado Real OANDA)
+oro = TA_Handler(
+    symbol="XAUUSD",
+    exchange="OANDA",
+    screener="forex",
+    interval=Interval.INTERVAL_1_MINUTE
+)
+
+print("🚀 LÓGICA TRADING ACTIVADA")
+print("🔱 Bot operando en ORO (RSI 58/42)")
+print("🛡️ Seguridad: Bloqueo de 2 min tras señal.")
 
 while True:
     if bloqueo:
-        time.sleep(1)
+        time.sleep(5)
         continue
 
-    for a in activos:
-        if bloqueo: break
-        try:
-            handler = TA_Handler(
-                symbol=a['symbol'],
-                exchange=a['ex'],
-                screener=a['scr'],
-                interval=Interval.INTERVAL_1_MINUTE
-            )
+    try:
+        # Analizamos TradingView
+        analisis = oro.get_analysis()
+        rsi = analisis.indicators["RSI"]
+        precio = analisis.indicators["close"]
+        
+        print(f"📊 ORO: ${precio} | RSI: {round(rsi, 2)}")
+
+        # Lógica de señales LuxAlgo
+        if rsi >= 58.0 or rsi <= 42.0:
+            bloqueo = True
+            direccion = "BAJA (DOWN) 🔻" if rsi >= 58.0 else "SUBE (UP) 🟢"
             
-            data = handler.get_analysis().indicators
-            rsi = data["RSI"]
-            precio = data["close"]
+            msg = (f"🔱 **ORO: SEÑAL DE ALTA PRECISIÓN**\n"
+                   f"──────────────────\n"
+                   f"📈 Operación: **{direccion}**\n"
+                   f"📊 RSI Real: `{round(rsi, 2)}`\n"
+                   f"💵 Precio: `${precio}`\n"
+                   f"⏳ Pausa de Seguridad: **2 MINUTOS**\n"
+                   f"──────────────────\n"
+                   f"🎯 *Lógica Trading: Opera solo en Mercado Real.*")
             
-            # Monitor en consola (Para ver que el bot lee todo)
-            print(f"📊 {a['n']}: RSI {round(rsi, 2)}")
+            enviar_telegram(msg)
+            
+            # Aplicamos tu instrucción de los 2 minutos de experiencia
+            threading.Timer(120, desbloquear).start()
 
-            # LÓGICA ORIGINAL 58/42
-            if rsi >= 58.0 or rsi <= 42.0:
-                bloqueo = True
-                direccion = "BAJA (DOWN) 🔻" if rsi >= 58.0 else "SUBE (UP) 🟢"
-                
-                msg = (f"🚀 **¡ENTRADA LÓGICA TRADING!**\n"
-                       f"──────────────────\n"
-                       f"💎 Activo: **{a['n']}**\n"
-                       f"📈 Operación: **{direccion}**\n"
-                       f"📊 RSI: `{round(rsi, 2)}`\n"
-                       f"⏳ Tiempo: **2 MINUTOS**\n"
-                       f"──────────────────\n"
-                       f"🎯 *¡Entra ya en Pocket Option!*")
-                
-                enviar(msg)
-                
-                # REGLA: 2 minutos de espera para evitar saturación
-                def liberar():
-                    global bloqueo
-                    enviar(f"✅ **Operación finalizada.**\nBuscando nueva señal...")
-                    bloqueo = False
-                
-                threading.Timer(120, liberar).start()
-                break 
-
-        except:
-            continue
-
-    time.sleep(0.5)
+    except Exception as e:
+        print(f"📡 Buscando señal estable... ({e})")
+    
+    time.sleep(2)
