@@ -7,9 +7,13 @@ from tradingview_ta import TA_Handler, Interval
 TOKEN = "8596292166:AAHL3VHIZOS1rKh9NsteznCcbHoOdtnIK90" 
 ID_PERSONAL = "6717348273"
 
+# VARIABLES DE CONTROL DE FLUJO
 bloqueo = False
+contador_senales = 0
+LIMITE_SENALES = 5             # <--- Límite de 5 operaciones
+TIEMPO_ENFRIAMIENTO = 1800     # <--- 30 Minutos (1800 segundos)
 
-# Activos seleccionados para Mercado Real
+# Activos para monitoreo real
 activos = [
     {"symbol": "XAUUSD", "ex": "OANDA", "n": "ORO ✨"},
     {"symbol": "EURUSD", "ex": "FX_IDC", "n": "EUR/USD 🇪🇺"},
@@ -27,18 +31,34 @@ def enviar_telegram(mensaje):
 def desbloquear():
     global bloqueo
     bloqueo = False
-    print("✅ Pausa terminada. Buscando nuevas oportunidades...")
+    print("✅ Pausa de experiencia (2 min) completada.")
 
-print("🚀 MULTI-BOT LÓGICA TRADING ACTIVADO")
-print("📡 Monitoreando: Oro, EURUSD, GBPUSD, USDJPY")
+print("🚀 BOT LÓGICA TRADING - NUBE READY")
+print(f"🛡️ Configuración: {LIMITE_SENALES} señales -> 30 min de descanso.")
 
 while True:
+    # 1. Verificación de Límite de señales para enfriar la API
+    if contador_senales >= LIMITE_SENALES:
+        msg_descanso = (f"🧊 **MODO ENFRIAMIENTO TOTAL**\n"
+                        f"──────────────────\n"
+                        f"Se han enviado {LIMITE_SENALES} señales con éxito.\n"
+                        f"Descansando **30 minutos** para proteger la API y asegurar precisión.\n"
+                        f"──────────────────\n"
+                        f"💤 *¡Toma un descanso, Lógica Trading!*")
+        print("🧊 Iniciando descanso de 30 minutos...")
+        enviar_telegram(msg_descanso)
+        
+        time.sleep(TIEMPO_ENFRIAMIENTO) 
+        
+        contador_senales = 0 # Reinicio de contador
+        enviar_telegram("🔄 **¡API Refrescada!** Buscando nuevas oportunidades en el mercado...")
+
     if bloqueo:
         time.sleep(10)
         continue
 
     for a in activos:
-        if bloqueo: break # Si sale señal en uno, deja de buscar en los otros
+        if bloqueo or contador_senales >= LIMITE_SENALES: break
         
         try:
             handler = TA_Handler(
@@ -48,33 +68,35 @@ while True:
             analisis = handler.get_analysis()
             rsi = analisis.indicators["RSI"]
             
-            print(f"📊 {a['n']}: RSI {round(rsi, 2)}")
+            print(f"📊 {a['n']}: RSI {round(rsi, 2)} | Señales: {contador_senales}/{LIMITE_SENALES}")
 
-            # Lógica LuxAlgo 58/42
+            # Estrategia RSI 58/42
             if rsi >= 58.0 or rsi <= 42.0:
                 bloqueo = True
-                dir_msg = "BAJA (DOWN) 🔻" if rsi >= 58.0 else "SUBE (UP) 🟢"
+                contador_senales += 1
                 
-                msg = (f"🔔 **¡SEÑAL ENCONTRADA!**\n"
+                direccion = "BAJA (DOWN) 🔻" if rsi >= 58.0 else "SUBE (UP) 🟢"
+                
+                msg = (f"🔔 **SEÑAL #{contador_senales} DETECTADA**\n"
                        f"──────────────────\n"
                        f"💎 Activo: **{a['n']}**\n"
-                       f"📈 Operación: **{dir_msg}**\n"
+                       f"📈 Operación: **{direccion}**\n"
                        f"📊 RSI: `{round(rsi, 2)}`\n"
-                       f"⏳ Pausa: **2 MINUTOS**\n"
+                       f"⏳ Bloqueo: **2 MINUTOS**\n"
                        f"──────────────────\n"
-                       f"🎯 *¡Entra ahora en Pocket Option!*")
+                       f"🎯 *Lógica Trading: Entra con precisión.*")
                 
                 enviar_telegram(msg)
-                # Tu regla de los 2 minutos de experiencia
+                
+                # Instrucción de seguridad: 2 minutos de pausa
                 threading.Timer(120, desbloquear).start()
             
-            # Pequeña pausa entre activos para no saturar la API
-            time.sleep(3) 
+            time.sleep(5) # Espacio entre activos para evitar el error 429
 
         except Exception as e:
             if "429" in str(e):
-                print("⚠️ Límite de API. Esperando enfriamiento...")
-                time.sleep(20)
+                print("⚠️ Error 429 detectado. Esperando un momento...")
+                time.sleep(60)
             continue
 
-    time.sleep(5) # Pausa antes de la siguiente vuelta completa
+    time.sleep(10) # Pausa entre ciclos de escaneo
