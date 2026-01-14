@@ -14,7 +14,7 @@ activos = [
     {"symbol": "GBPUSD", "ex": "FX_IDC", "n": "GBP/USD 🇬🇧"},
     {"symbol": "USDJPY", "ex": "FX_IDC", "n": "USD/JPY 🇯🇵"},
     {"symbol": "AUDUSD", "ex": "FX_IDC", "n": "AUD/USD 🇦🇺"},
-    {"symbol": "USDCAD", "ex": "FX_IDC", "n": "USD/CAD 🇨🇦"},
+    {"symbol": "USDCAD", "ex": "FX_IDC", "n": "USD/CAD 🇨🇦},
     {"symbol": "USDCHF", "ex": "FX_IDC", "n": "USD/CHF 🇨🇭"}
 ]
 
