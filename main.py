@@ -7,7 +7,7 @@ from tradingview_ta import TA_Handler, Interval
 TOKEN = "8386038643:AAEngPQbBuu41WBWm7pCYQxm3yEowoJzYaw"
 ID_PERSONAL = "6717348273"
 
-# ACTIVOS PROFESIONALES DE ALTA LIQUIDEZ (Pocket Option Ready)
+# ACTIVOS PROFESIONALES (MERCADO REAL)
 activos = [
     {"symbol": "XAUUSD", "ex": "OANDA", "n": "ORO ✨"},
     {"symbol": "EURUSD", "ex": "FX_IDC", "n": "EUR/USD 🇪🇺"},
@@ -25,58 +25,66 @@ def enviar(msg):
     try:
         requests.post(url, json={"chat_id": ID_PERSONAL, "text": msg, "parse_mode": "Markdown"}, timeout=10)
     except:
-        pass
+        print("⚠️ Error de conexión con Telegram...")
 
-print("🚀 LÓGICA TRADING: Bot Profesional Activado.")
-print("📉 Enfocado en ORO y Divisas Principales (RSI 58/42).")
+def liberar():
+    global bloqueo
+    enviar("🏁 **Análisis finalizado.** Buscando nueva entrada segura en Mercado Real...")
+    bloqueo = False
+    print("🔄 Bot desbloqueado. Escaneando...")
 
+print("🚀 LÓGICA TRADING: BOT MERCADO REAL + RSI ACTIVADO")
+print("📉 Estrategia: RSI 58/42 - Sin pausas por error.")
+
+# BUCLE INFINITO (NUNCA SE APAGA)
 while True:
-    if bloqueo:
-        time.sleep(1)
-        continue
-
-    for a in activos:
-        if bloqueo: break
-        try:
-            handler = TA_Handler(
-                symbol=a['symbol'],
-                exchange=a['ex'],
-                screener="forex",
-                interval=Interval.INTERVAL_1_MINUTE
-            )
-            
-            data = handler.get_analysis().indicators
-            rsi = data["RSI"]
-            
-            # Monitor en consola para control total
-            print(f"📊 {a['n']}: RSI {round(rsi, 2)}")
-
-            # LÓGICA RSI ORIGINAL 58/42
-            if rsi >= 58.0 or rsi <= 42.0:
-                bloqueo = True
-                direccion = "BAJA (DOWN) 🔻" if rsi >= 58.0 else "SUBE (UP) 🟢"
-                
-                msg = (f"🚀 **¡ENTRADA PROFESIONAL!**\n"
-                       f"──────────────────\n"
-                       f"💎 Par: **{a['n']}**\n"
-                       f"📈 Operación: **{direccion}**\n"
-                       f"📊 RSI: `{round(rsi, 2)}`\n"
-                       f"⏳ Tiempo: **2 MINUTOS**\n"
-                       f"──────────────────\n"
-                       f"🎯 *Lógica Trading: Ejecuta en Pocket Option.*")
-                
-                enviar(msg)
-                
-                # PAUSA DE 2 MINUTOS PARA EVITAR SATURACIÓN
-                def liberar():
-                    global bloqueo
-                    enviar(f"🏁 **Análisis finalizado.**\nBuscando siguiente entrada...")
-                    bloqueo = False
-                
-                threading.Timer(120, liberar).start()
-                break 
-
-        except:
+    try:
+        if bloqueo:
+            time.sleep(1)
             continue
 
-    time.sleep(0.5)
+        for a in activos:
+            if bloqueo: break
+            try:
+                handler = TA_Handler(
+                    symbol=a['symbol'],
+                    exchange=a['ex'],
+                    screener="forex",
+                    interval=Interval.INTERVAL_1_MINUTE
+                )
+                
+                data = handler.get_analysis().indicators
+                rsi = data["RSI"]
+                
+                # Monitor en consola para control total
+                print(f"📊 {a['n']}: RSI {round(rsi, 2)}")
+
+                # LÓGICA RSI ORIGINAL 58/42
+                if rsi >= 58.0 or rsi <= 42.0:
+                    bloqueo = True
+                    direccion = "BAJA (DOWN) 🔻" if rsi >= 58.0 else "SUBE (UP) 🟢"
+                    
+                    msg = (f"🚀 **¡ENTRADA PROFESIONAL!**\n"
+                           f"──────────────────\n"
+                           f"💎 Par: **{a['n']}**\n"
+                           f"📈 Operación: **{direccion}**\n"
+                           f"📊 RSI Real: `{round(rsi, 2)}`\n"
+                           f"⏳ Tiempo: **2 MINUTOS**\n"
+                           f"──────────────────\n"
+                           f"🎯 *Lógica Trading: Ejecuta en Mercado Real.*")
+                    
+                    enviar(msg)
+                    
+                    # Temporizador de 2 minutos (120 seg)
+                    threading.Timer(120, liberar).start()
+                    break 
+
+            except Exception:
+                continue 
+
+        time.sleep(0.5)
+
+    except Exception as e:
+        print(f"⚠️ Reiniciando sistema... Error: {e}")
+        time.sleep(5)
+        continue
