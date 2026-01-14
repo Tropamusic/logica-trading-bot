@@ -1,104 +1,70 @@
 import time
 import requests
-import threading
-from datetime import datetime
-import pytz 
 from tradingview_ta import TA_Handler, Interval
 
 # --- DATOS DE LÓGICA TRADING ---
 TOKEN = "8386038643:AAEngPQbBuu41WBWm7pCYQxm3yEowoJzYaw"
 ID_PERSONAL = "6717348273"
-BOT_NAME = "Lógica Trading 📊"
-MI_ZONA_HORARIA = pytz.timezone('America/Caracas') 
 
-conteo_alertas = 0
-bloqueo_operacion_activa = False 
-
-def enviar_telegram(mensaje, destino):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {"chat_id": destino, "text": mensaje, "parse_mode": "Markdown"}
-    try: requests.post(url, json=payload, timeout=10)
-    except: print("⚠️ Error temporal de Telegram, reintentando...")
-
-def desbloquear_bot():
-    global bloqueo_operacion_activa
-    bloqueo_operacion_activa = False
-    print("🔄 [SISTEMA] Pausa de 2 min terminada. Escaneando mercado real...")
-
-# --- LISTA MAESTRA DE ACTIVOS ---
+# LOS ACTIVOS DE LOS PROFESIONALES (Alta liquidez, sin enfoque en JPY)
 activos = [
-    {"trading": "XAUUSD", "ex": "OANDA", "display": "ORO (GOLD) ✨", "type": "forex"},
-    {"trading": "USOIL", "ex": "TVC", "display": "PETRÓLEO WTI 🛢️", "type": "forex"},
-    {"trading": "BTCUSD", "ex": "BITSTAMP", "display": "BITCOIN (BTC) ₿", "type": "crypto"},
-    {"trading": "ETHUSD", "ex": "BITSTAMP", "display": "ETHEREUM (ETH) ⟠", "type": "crypto"},
-    {"trading": "EURUSD", "ex": "FX_IDC", "display": "EUR/USD 🇪🇺", "type": "forex"},
-    {"trading": "GBPUSD", "ex": "FX_IDC", "display": "GBP/USD 🇬🇧", "type": "forex"},
-    {"trading": "GBPJPY", "ex": "FX_IDC", "display": "GBP/JPY 💷", "type": "forex"},
-    {"trading": "USDJPY", "ex": "FX_IDC", "display": "USD/JPY 🇯🇵", "type": "forex"},
-    {"trading": "AUDUSD", "ex": "FX_IDC", "display": "AUD/USD 🇦🇺", "type": "forex"}
+    {"symbol": "XAUUSD", "ex": "OANDA", "n": "ORO (MÁXIMA VOLATILIDAD) ✨"},
+    {"symbol": "EURUSD", "ex": "FX_IDC", "n": "EUR/USD (LIQUIDEZ PURA) 🇪🇺"},
+    {"symbol": "GBPUSD", "ex": "FX_IDC", "n": "GBP/USD (EL CABLE) 🇬🇧"},
+    {"symbol": "BTCUSD", "ex": "BITSTAMP", "n": "BITCOIN (24/7) ₿"},
+    {"symbol": "US30", "ex": "CURRENCYCOM", "n": "DOW JONES (INSTITUCIONAL) 🇺🇸"},
+    {"symbol": "USOIL", "ex": "TVC", "n": "PETRÓLEO WTI 🛢️"}
 ]
 
-print(f"🚀 {BOT_NAME} - MODO ANTI-APAGADO ACTIVADO.")
+print("🚀 LÓGICA TRADING: Bot de Acción del Precio Activado.")
+print("💎 Analizando niveles críticos de soporte y resistencia...")
 
-# BUCLE PRINCIPAL QUE NUNCA MUERE
+def enviar_telegram(msg):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    try: requests.post(url, json={"chat_id": ID_PERSONAL, "text": msg, "parse_mode": "Markdown"})
+    except: pass
+
 while True:
     try:
-        ahora = datetime.now(MI_ZONA_HORARIA)
-        if ahora.hour == 0 and ahora.minute == 0:
-            conteo_alertas = 0
+        for a in activos:
+            # Analizamos en 1 minuto para señales rápidas
+            handler = TA_Handler(
+                symbol=a['symbol'],
+                exchange=a['ex'],
+                screener="forex" if "USD" in a['symbol'] else "crypto" if "BTC" in a['symbol'] else "cfd",
+                interval=Interval.INTERVAL_1_MINUTE
+            )
+            
+            analisis = handler.get_analysis()
+            resumen = analisis.summary # Los profesionales miran el RESUMEN de fuerza
+            precio = analisis.indicators["close"]
+            
+            # MOSTRAR EN CONSOLA PARA VER QUE ESTÁ VIVO
+            print(f"📡 {a['n']}: {resumen['RECOMMENDATION']} | Precio: {precio}")
 
-        if bloqueo_operacion_activa:
-            time.sleep(5)
-            continue
-
-        for activo in activos:
-            if bloqueo_operacion_activa: break 
-
-            try:
-                handler = TA_Handler(
-                    symbol=activo['trading'], 
-                    exchange=activo['ex'], 
-                    screener=activo['type'], 
-                    interval=Interval.INTERVAL_1_MINUTE
-                )
-                analysis = handler.get_analysis()
-                rsi = analysis.indicators["RSI"]
-                precio = analysis.indicators["close"]
-
-                # Lógica 58/42
-                if rsi >= 58 or rsi <= 42:
-                    bloqueo_operacion_activa = True 
-                    conteo_alertas += 1
-                    direccion = "BAJA (DOWN) 🔻" if rsi >= 58 else "SUBE (UP) 🟢"
-                    
-                    msg = (f"🚀 **¡ENTRADA LÓGICA TRADING!**\n"
-                           f"──────────────────\n"
-                           f"💎 Activo: **{activo['display']}**\n"
-                           f"📈 Operación: **{direccion}**\n"
-                           f"💵 Precio: `{round(precio, 5)}`\n"
-                           f"⏳ Tiempo: **2 MINUTOS**\n"
-                           f"──────────────────\n"
-                           f"🎯 *Señal #{conteo_alertas}*")
-                    enviar_telegram(msg, ID_PERSONAL)
-                    
-                    def finalizar_y_reportar(a=activo, n=conteo_alertas):
-                        reporte = (f"🏆 **¡RESULTADO EXITOSO!**\n\n"
-                                   f"El activo **{a['display']}** cumplió el análisis.\n"
-                                   f"Felicidades a los que operaron con **Lógica Trading** 💰")
-                        enviar_telegram(reporte, ID_PERSONAL)
-                        desbloquear_bot()
-
-                    # BLOQUEO DE 2 MINUTOS PARA NO SATURAR
-                    threading.Timer(135, finalizar_y_reportar).start()
-                    break 
-
-            except Exception:
-                continue 
-        
-        time.sleep(2)
+            # LÓGICA PROFESIONAL: Solo entramos cuando hay "FUERTE" (Strong)
+            # Esto significa que múltiples indicadores de precio coinciden
+            if "STRONG" in resumen['RECOMMENDATION']:
+                tipo = resumen['RECOMMENDATION'] # "STRONG_BUY" o "STRONG_SELL"
+                dir_msg = "COMPRA (UP) 🟢" if "BUY" in tipo else "VENTA (DOWN) 🔻"
+                
+                msg = (f"🔥 **¡ALERTA PROFESIONAL: {a['n']}!**\n"
+                       f"──────────────────\n"
+                       f"📈 Acción: **{dir_msg}**\n"
+                       f"💵 Precio Real: `{precio}`\n"
+                       f"⚡ Fuerza: **INSTITUCIONAL**\n"
+                       f"⏳ Tiempo: **2 MINUTOS**\n"
+                       f"──────────────────\n"
+                       f"🎯 *Lógica Trading: Operando con el flujo del dinero.*")
+                
+                enviar_telegram(msg)
+                print(f"✅ SEÑAL ENVIADA EN {a['symbol']}. Pausando 2 min para no saturar...")
+                time.sleep(125) # Tu regla de oro: 2 min de experiencia
+                break 
 
     except Exception as e:
-        # SI ALGO FALLA, EL BOT NO SE APAGA, SE REINICIA SOLO
-        print(f"⚠️ Error detectado: {e}. Reiniciando sistema en 10 segundos...")
-        time.sleep(10)
+        print(f"⚠️ Reconectando con mercado real...")
+        time.sleep(5)
         continue
+    
+    time.sleep(2) # Escaneo constante
