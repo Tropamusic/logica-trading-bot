@@ -7,96 +7,101 @@ from tradingview_ta import TA_Handler, Interval
 TOKEN = "8596292166:AAHL3VHIZOS1rKh9NsteznCcbHoOdtnIK90" 
 ID_PERSONAL = "6717348273"
 
-# VARIABLES DE CONTROL DE FLUJO
 bloqueo = False
 contador_senales = 0
-LIMITE_SENALES = 5             # <--- Límite de 5 operaciones
-TIEMPO_ENFRIAMIENTO = 1800     # <--- 30 Minutos (1800 segundos)
+LIMITE_SENALES = 5
+TIEMPO_ENFRIAMIENTO = 1800 
 
-# Activos para monitoreo real
-activos = [
-    {"symbol": "XAUUSD", "ex": "OANDA", "n": "ORO ✨"},
-    {"symbol": "EURUSD", "ex": "FX_IDC", "n": "EUR/USD 🇪🇺"},
-    {"symbol": "GBPUSD", "ex": "FX_IDC", "n": "GBP/USD 🇬🇧"},
-    {"symbol": "USDJPY", "ex": "FX_IDC", "n": "USD/JPY 🇯🇵"}
+analistas = [
+    {"handler": TA_Handler(symbol="XAUUSD", exchange="OANDA", screener="forex", interval=Interval.INTERVAL_1_MINUTE), "n": "ORO ✨"},
+    {"handler": TA_Handler(symbol="EURUSD", exchange="FX_IDC", screener="forex", interval=Interval.INTERVAL_1_MINUTE), "n": "EUR/USD 🇪🇺"},
+    {"handler": TA_Handler(symbol="GBPUSD", exchange="FX_IDC", screener="forex", interval=Interval.INTERVAL_1_MINUTE), "n": "GBP/USD 🇬🇧"},
+    {"handler": TA_Handler(symbol="USDJPY", exchange="FX_IDC", screener="forex", interval=Interval.INTERVAL_1_MINUTE), "n": "USD/JPY 🇯🇵"}
 ]
 
 def enviar_telegram(mensaje):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     try:
         requests.post(url, json={"chat_id": ID_PERSONAL, "text": mensaje, "parse_mode": "Markdown"}, timeout=10)
+    except: pass
+
+def verificar_resultado(handler, nombre_activo, precio_entrada, direccion):
+    """Espera 2 minutos y verifica si la señal fue real y ganadora"""
+    time.sleep(120)
+    try:
+        precio_final = handler.get_analysis().indicators["close"]
+        resultado = ""
+        icono = ""
+        
+        if direccion == "BAJA" and precio_final < precio_entrada:
+            resultado = "WIN (GANADA) ✅"
+            icono = "💰"
+        elif direccion == "SUBE" and precio_final > precio_entrada:
+            resultado = "WIN (GANADA) ✅"
+            icono = "💰"
+        else:
+            resultado = "LOSS (PERDIDA) ❌"
+            icono = "📉"
+            
+        msg_resultado = (f"{icono} **RESULTADO REAL: {nombre_activo}**\n"
+                         f"──────────────────\n"
+                         f"🏁 Resultado: **{resultado}**\n"
+                         f"Precio Entrada: `{precio_entrada}`\n"
+                         f"Precio Cierre: `{precio_final}`\n"
+                         f"──────────────────\n"
+                         f"🔄 *Sistema listo para buscar otra señal.*")
+        enviar_telegram(msg_resultado)
     except:
         pass
-
-def desbloquear():
+    
     global bloqueo
     bloqueo = False
-    print("✅ Pausa de experiencia (2 min) completada.")
 
-print("🚀 BOT LÓGICA TRADING - NUBE READY")
-print(f"🛡️ Configuración: {LIMITE_SENALES} señales -> 30 min de descanso.")
+print("🚀 LÓGICA TRADING: MODO RESULTADOS REALES ACTIVADO")
 
 while True:
-    # 1. Verificación de Límite de señales para enfriar la API
     if contador_senales >= LIMITE_SENALES:
-        msg_descanso = (f"🧊 **MODO ENFRIAMIENTO TOTAL**\n"
-                        f"──────────────────\n"
-                        f"Se han enviado {LIMITE_SENALES} señales con éxito.\n"
-                        f"Descansando **30 minutos** para proteger la API y asegurar precisión.\n"
-                        f"──────────────────\n"
-                        f"💤 *¡Toma un descanso, Lógica Trading!*")
-        print("🧊 Iniciando descanso de 30 minutos...")
-        enviar_telegram(msg_descanso)
-        
-        time.sleep(TIEMPO_ENFRIAMIENTO) 
-        
-        contador_senales = 0 # Reinicio de contador
-        enviar_telegram("🔄 **¡API Refrescada!** Buscando nuevas oportunidades en el mercado...")
+        time.sleep(TIEMPO_ENFRIAMIENTO)
+        contador_senales = 0
 
     if bloqueo:
         time.sleep(10)
         continue
 
-    for a in activos:
+    for a in analistas:
         if bloqueo or contador_senales >= LIMITE_SENALES: break
         
         try:
-            handler = TA_Handler(
-                symbol=a['symbol'], exchange=a['ex'],
-                screener="forex", interval=Interval.INTERVAL_1_MINUTE
-            )
-            analisis = handler.get_analysis()
+            analisis = a["handler"].get_analysis()
             rsi = analisis.indicators["RSI"]
+            precio_actual = analisis.indicators["close"]
             
-            print(f"📊 {a['n']}: RSI {round(rsi, 2)} | Señales: {contador_senales}/{LIMITE_SENALES}")
+            print(f"📊 {a['n']}: RSI {round(rsi, 2)}")
 
-            # Estrategia RSI 58/42
+            # Lógica de Señal
             if rsi >= 58.0 or rsi <= 42.0:
                 bloqueo = True
                 contador_senales += 1
+                dir_op = "BAJA" if rsi >= 58.0 else "SUBE"
+                emoji = "🔻" if dir_op == "BAJA" else "🟢"
                 
-                direccion = "BAJA (DOWN) 🔻" if rsi >= 58.0 else "SUBE (UP) 🟢"
-                
-                msg = (f"🔔 **SEÑAL #{contador_senales} DETECTADA**\n"
+                msg = (f"🔔 **SEÑAL DETECTADA: {a['n']}**\n"
                        f"──────────────────\n"
-                       f"💎 Activo: **{a['n']}**\n"
-                       f"📈 Operación: **{direccion}**\n"
+                       f"📈 Operación: **{dir_op} {emoji}**\n"
                        f"📊 RSI: `{round(rsi, 2)}`\n"
-                       f"⏳ Bloqueo: **2 MINUTOS**\n"
+                       f"💵 Precio Entrada: `{precio_actual}`\n"
                        f"──────────────────\n"
-                       f"🎯 *Lógica Trading: Entra con precisión.*")
+                       f"⏱️ *Verificando resultado en 2 min...*")
                 
                 enviar_telegram(msg)
                 
-                # Instrucción de seguridad: 2 minutos de pausa
-                threading.Timer(120, desbloquear).start()
+                # Lanzamos la verificación en segundo plano para no detener el bot
+                threading.Thread(target=verificar_resultado, args=(a["handler"], a["n"], precio_actual, dir_op)).start()
             
-            time.sleep(5) # Espacio entre activos para evitar el error 429
+            time.sleep(6) 
 
         except Exception as e:
-            if "429" in str(e):
-                print("⚠️ Error 429 detectado. Esperando un momento...")
-                time.sleep(60)
+            if "429" in str(e): time.sleep(120)
             continue
 
-    time.sleep(10) # Pausa entre ciclos de escaneo
+    time.sleep(10)
