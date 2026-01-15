@@ -15,41 +15,54 @@ wins, losses = 0, 0
 LIMITE_SENALES = 5
 TIEMPO_ENFRIAMIENTO = 1800 
 
-analistas = [
-    {"handler": TA_Handler(symbol="XAUUSD", exchange="OANDA", screener="forex", interval=Interval.INTERVAL_1_MINUTE), "n": "ORO ✨"},
-    {"handler": TA_Handler(symbol="EURUSD", exchange="FX_IDC", screener="forex", interval=Interval.INTERVAL_1_MINUTE), "n": "EUR/USD 🇪🇺"},
-    {"handler": TA_Handler(symbol="GBPUSD", exchange="FX_IDC", screener="forex", interval=Interval.INTERVAL_1_MINUTE), "n": "GBP/USD 🇬🇧"},
-    {"handler": TA_Handler(symbol="USDJPY", exchange="FX_IDC", screener="forex", interval=Interval.INTERVAL_1_MINUTE), "n": "USD/JPY 🇯🇵"}
+# LISTA EXPANDIDA DE 10 ACTIVOS (MERCADO REAL)
+activos_config = [
+    {"s": "XAUUSD", "e": "OANDA", "n": "ORO ✨"},
+    {"s": "EURUSD", "e": "FX_IDC", "n": "EUR/USD 🇪🇺"},
+    {"s": "GBPUSD", "e": "FX_IDC", "n": "GBP/USD 🇬🇧"},
+    {"s": "USDJPY", "e": "FX_IDC", "n": "USD/JPY 🇯🇵"},
+    {"s": "AUDUSD", "e": "FX_IDC", "n": "AUD/USD 🇦🇺"},
+    {"s": "USDCAD", "e": "FX_IDC", "n": "USD/CAD 🇨🇦"},
+    {"s": "EURJPY", "e": "FX_IDC", "n": "EUR/JPY 🇯🇵"},
+    {"s": "GBP JPY", "e": "FX_IDC", "n": "GBP/JPY 🇬🇧"},
+    {"s": "NZDUSD", "e": "FX_IDC", "n": "NZD/USD 🇳🇿"},
+    {"s": "USDCHF", "e": "FX_IDC", "n": "USD/CHF 🇨🇭"}
 ]
+
+analistas = []
+for a in activos_config:
+    analistas.append({
+        "handler": TA_Handler(symbol=a['s'], exchange=a['e'], screener="forex", interval=Interval.INTERVAL_1_MINUTE),
+        "n": a['n']
+    })
 
 def enviar_telegram(mensaje):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    try:
-        requests.post(url, json={"chat_id": ID_PERSONAL, "text": mensaje, "parse_mode": "Markdown"}, timeout=10)
+    try: requests.post(url, json={"chat_id": ID_PERSONAL, "text": mensaje, "parse_mode": "Markdown"}, timeout=10)
     except: pass
 
 def verificar_resultado(handler, nombre_activo, precio_entrada, direccion):
     global wins, losses, bloqueo
-    time.sleep(120) # Tu regla de los 2 minutos de experiencia
+    time.sleep(120) 
     try:
         precio_final = handler.get_analysis().indicators["close"]
         if (direccion == "BAJA" and precio_final < precio_entrada) or (direccion == "SUBE" and precio_final > precio_entrada):
             wins += 1
-            enviar_telegram(f"✅ **WIN: {nombre_activo}**\nEntrada: `{precio_entrada}` | Cierre: `{precio_final}`\n¡Buen trade, Lógica Trading! 💰")
+            enviar_telegram(f"✅ **WIN: {nombre_activo}**\n💰 Entrada: `{precio_entrada}` | Cierre: `{precio_final}`")
         else:
             losses += 1
-            enviar_telegram(f"❌ **LOSS: {nombre_activo}**\nEntrada: `{precio_entrada}` | Cierre: `{precio_final}`\nAnaliza el mercado y sigue. 📉")
+            enviar_telegram(f"❌ **LOSS: {nombre_activo}**\n📉 Entrada: `{precio_entrada}` | Cierre: `{precio_final}`")
     except: pass
     bloqueo = False
 
-print(f"🚀 {BOT_NAME} ACTIVADO")
-enviar_telegram(f"🚀 **{BOT_NAME} ONLINE**\nAnalizando mercado real con alertas de volatilidad.")
+print(f"🚀 {BOT_NAME} - MULTI-ACTIVO (10) ACTIVADO")
+enviar_telegram(f"🚀 **{BOT_NAME} ONLINE**\n📡 Monitoreando 10 activos del mercado real.")
 
 while True:
     if contador_senales >= LIMITE_SENALES:
         total = wins + losses
         efect = (wins / total * 100) if total > 0 else 0
-        enviar_telegram(f"📊 **{BOT_NAME}: REPORTE**\n──────────────────\n✅ Ganadas: **{wins}**\n❌ Perdidas: **{losses}**\n🎯 Efectividad: **{round(efect, 2)}%**\n──────────────────\n🧊 Descanso de 30 min iniciado.")
+        enviar_telegram(f"📊 **{BOT_NAME}: REPORTE**\n✅ Ganadas: {wins} | ❌ Perdidas: {losses}\n🎯 Efectividad: {round(efect, 2)}%")
         time.sleep(TIEMPO_ENFRIAMIENTO)
         contador_senales, wins, losses = 0, 0, 0
 
@@ -60,19 +73,13 @@ while True:
     for a in analistas:
         if bloqueo or contador_senales >= LIMITE_SENALES: break
         try:
-            analisis = a["handler"].get_analysis()
-            indicators = analisis.indicators
+            indicators = a["handler"].get_analysis().indicators
             rsi = indicators["RSI"]
             precio_actual = indicators["close"]
             atr = indicators["ATR"]
-
-            # LÓGICA DE ALERTA DE VOLATILIDAD
-            # Si el ATR es inusualmente alto, el mercado está "picado"
-            volatilidad_alta = False
-            if "USD" in a['n'] and atr > 0.0007: volatilidad_alta = True
-            if "ORO" in a['n'] and atr > 0.8: volatilidad_alta = True
             
-            print(f"📊 {a['n']}: RSI {round(rsi, 2)} | ATR: {round(atr, 4)}")
+            # Alerta de volatilidad según el activo
+            volatilidad_alta = (atr > 0.0008) if "JPY" not in a['n'] else (atr > 0.03)
 
             if rsi >= 58.0 or rsi <= 42.0:
                 bloqueo = True
@@ -80,18 +87,13 @@ while True:
                 dir_op = "BAJA" if rsi >= 58.0 else "SUBE"
                 emoji = "🔻" if dir_op == "BAJA" else "🟢"
                 
-                alerta_v = "⚠️ **¡ALERTA! VOLATILIDAD ALTA**\n" if volatilidad_alta else ""
-                
-                enviar_telegram(f"{alerta_v}🔔 **SEÑAL #{contador_senales}: {a['n']}**\n"
-                                f"──────────────────\n"
-                                f"📈 Operación: **{dir_op} {emoji}**\n"
-                                f"📊 RSI: `{round(rsi, 2)}` | Precio: `{precio_actual}`\n"
-                                f"⏳ *Verificando en 2 min...*")
+                aviso_v = "⚠️ **VOLATILIDAD ALTA**\n" if volatilidad_alta else ""
+                enviar_telegram(f"{aviso_v}🔔 **SEÑAL #{contador_senales}: {a['n']}**\n📈 Operación: **{dir_op} {emoji}**\n📊 RSI: `{round(rsi, 2)}` | Precio: `{precio_actual}`")
                 
                 threading.Thread(target=verificar_resultado, args=(a["handler"], a["n"], precio_actual, dir_op)).start()
             
-            time.sleep(6) 
+            time.sleep(4) # Pausa estratégica para manejar 10 activos sin error 429
         except Exception as e:
             if "429" in str(e): time.sleep(120)
             continue
-    time.sleep(10)
+    time.sleep(5)
