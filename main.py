@@ -7,8 +7,11 @@ from tradingview_ta import TA_Handler, Interval
 TOKEN = "8596292166:AAHL3VHIZOS1rKh9NsteznCcbHoOdtnIK90" 
 ID_PERSONAL = "6717348273"
 
+# CONTADORES DE SESIÓN
 bloqueo = False
 contador_senales = 0
+wins = 0
+losses = 0
 LIMITE_SENALES = 5
 TIEMPO_ENFRIAMIENTO = 1800 
 
@@ -26,43 +29,49 @@ def enviar_telegram(mensaje):
     except: pass
 
 def verificar_resultado(handler, nombre_activo, precio_entrada, direccion):
-    """Espera 2 minutos y verifica si la señal fue real y ganadora"""
+    """Verifica el resultado real tras 2 minutos"""
+    global wins, losses, bloqueo
     time.sleep(120)
     try:
         precio_final = handler.get_analysis().indicators["close"]
-        resultado = ""
-        icono = ""
         
-        if direccion == "BAJA" and precio_final < precio_entrada:
-            resultado = "WIN (GANADA) ✅"
+        if (direccion == "BAJA" and precio_final < precio_entrada) or \
+           (direccion == "SUBE" and precio_final > precio_entrada):
+            res_txt = "WIN (GANADA) ✅"
             icono = "💰"
-        elif direccion == "SUBE" and precio_final > precio_entrada:
-            resultado = "WIN (GANADA) ✅"
-            icono = "💰"
+            wins += 1
         else:
-            resultado = "LOSS (PERDIDA) ❌"
+            res_txt = "LOSS (PERDIDA) ❌"
             icono = "📉"
+            losses += 1
             
-        msg_resultado = (f"{icono} **RESULTADO REAL: {nombre_activo}**\n"
-                         f"──────────────────\n"
-                         f"🏁 Resultado: **{resultado}**\n"
-                         f"Precio Entrada: `{precio_entrada}`\n"
-                         f"Precio Cierre: `{precio_final}`\n"
-                         f"──────────────────\n"
-                         f"🔄 *Sistema listo para buscar otra señal.*")
-        enviar_telegram(msg_resultado)
-    except:
-        pass
-    
-    global bloqueo
+        msg_res = (f"{icono} **RESULTADO: {nombre_activo}**\n"
+                   f"🏁: {res_txt}\n"
+                   f"Entrada: `{precio_entrada}` | Cierre: `{precio_final}`")
+        enviar_telegram(msg_res)
+    except: pass
     bloqueo = False
 
-print("🚀 LÓGICA TRADING: MODO RESULTADOS REALES ACTIVADO")
+print("🚀 LÓGICA TRADING: MODO ESTADÍSTICAS REALES")
 
 while True:
+    # REPORTE DE SESIÓN AL LLEGAR AL LÍMITE
     if contador_senales >= LIMITE_SENALES:
+        efectividad = (wins / LIMITE_SENALES) * 100
+        resumen = (f"📊 **RESUMEN DE SESIÓN: LÓGICA TRADING**\n"
+                   f"──────────────────\n"
+                   f"✅ Ganadas: **{wins}**\n"
+                   f"❌ Perdidas: **{losses}**\n"
+                   f"🎯 Efectividad: **{round(efectividad, 2)}%**\n"
+                   f"──────────────────\n"
+                   f"🧊 *Iniciando descanso de 30 min...*")
+        enviar_telegram(resumen)
+        
         time.sleep(TIEMPO_ENFRIAMIENTO)
         contador_senales = 0
+        wins = 0
+        losses = 0
+        enviar_telegram("🔄 **Sesión reiniciada.** ¡Vamos por más profit!")
 
     if bloqueo:
         time.sleep(10)
@@ -76,26 +85,18 @@ while True:
             rsi = analisis.indicators["RSI"]
             precio_actual = analisis.indicators["close"]
             
-            print(f"📊 {a['n']}: RSI {round(rsi, 2)}")
+            print(f"📊 {a['n']}: RSI {round(rsi, 2)} | {contador_senales}/{LIMITE_SENALES}")
 
-            # Lógica de Señal
             if rsi >= 58.0 or rsi <= 42.0:
                 bloqueo = True
                 contador_senales += 1
                 dir_op = "BAJA" if rsi >= 58.0 else "SUBE"
                 emoji = "🔻" if dir_op == "BAJA" else "🟢"
                 
-                msg = (f"🔔 **SEÑAL DETECTADA: {a['n']}**\n"
-                       f"──────────────────\n"
-                       f"📈 Operación: **{dir_op} {emoji}**\n"
-                       f"📊 RSI: `{round(rsi, 2)}`\n"
-                       f"💵 Precio Entrada: `{precio_actual}`\n"
-                       f"──────────────────\n"
-                       f"⏱️ *Verificando resultado en 2 min...*")
+                enviar_telegram(f"🔔 **SEÑAL #{contador_senales}: {a['n']}**\n"
+                                f"📈 Operación: **{dir_op} {emoji}**\n"
+                                f"📊 RSI: `{round(rsi, 2)}` | Precio: `{precio_actual}`")
                 
-                enviar_telegram(msg)
-                
-                # Lanzamos la verificación en segundo plano para no detener el bot
                 threading.Thread(target=verificar_resultado, args=(a["handler"], a["n"], precio_actual, dir_op)).start()
             
             time.sleep(6) 
