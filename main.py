@@ -12,10 +12,10 @@ BOT_NAME = "🔱 LÓGICA TRADING PRO"
 bloqueo = False
 contador_senales = 0
 wins, losses = 0, 0
+historial_log = [] # Para tu diario de trading
 LIMITE_SENALES = 5
 TIEMPO_ENFRIAMIENTO = 1800 
 
-# LISTA DE 10 ACTIVOS (MERCADO REAL)
 activos_config = [
     {"s": "XAUUSD", "e": "OANDA", "n": "ORO ✨"},
     {"s": "EURUSD", "e": "FX_IDC", "n": "EUR/USD 🇪🇺"},
@@ -23,8 +23,8 @@ activos_config = [
     {"s": "USDJPY", "e": "FX_IDC", "n": "USD/JPY 🇯🇵"},
     {"s": "AUDUSD", "e": "FX_IDC", "n": "AUD/USD 🇦🇺"},
     {"s": "USDCAD", "e": "FX_IDC", "n": "USD/CAD 🇨🇦"},
-    {"s": "EURJPY", "e": "FX_IDC", "n": "EUR/JPY 🇯🇵"},
-    {"s": "GBPJPY", "e": "FX_IDC", "n": "GBP/JPY 🇬🇧"},
+    {"s": "EURJPY", "e": "FX_IDC", "n": "EUR/JPY 🇪🇺🇯🇵"},
+    {"s": "GBPJPY", "e": "FX_IDC", "n": "GBP/JPY 🇬🇧🇯🇵"},
     {"s": "NZDUSD", "e": "FX_IDC", "n": "NZD/USD 🇳🇿"},
     {"s": "USDCHF", "e": "FX_IDC", "n": "USD/CHF 🇨🇭"}
 ]
@@ -42,29 +42,48 @@ def enviar_telegram(mensaje):
     except: pass
 
 def verificar_resultado(handler, nombre_activo, precio_entrada, direccion):
-    global wins, losses, bloqueo
+    global wins, losses, bloqueo, historial_log
     time.sleep(120) 
     try:
         precio_final = handler.get_analysis().indicators["close"]
-        if (direccion == "BAJA" and precio_final < precio_entrada) or (direccion == "SUBE" and precio_final > precio_entrada):
-            wins += 1
-            enviar_telegram(f"✅ **WIN: {nombre_activo}**\n💰 Entrada: `{precio_entrada}` | Cierre: `{precio_final}`")
-        else:
-            losses += 1
-            enviar_telegram(f"❌ **LOSS: {nombre_activo}**\n📉 Entrada: `{precio_entrada}` | Cierre: `{precio_final}`")
+        exito = (direccion == "BAJA" and precio_final < precio_entrada) or (direccion == "SUBE" and precio_final > precio_entrada)
+        
+        resultado_txt = "WIN ✅" if exito else "LOSS ❌"
+        if exito: wins += 1
+        else: losses += 1
+        
+        # Guardamos en el diario
+        historial_log.append(f"- {nombre_activo}: {resultado_txt}")
+        
+        enviar_telegram(f"🏁 **{resultado_txt}: {nombre_activo}**\nEntrada: `{precio_entrada}` | Cierre: `{precio_final}`")
     except: pass
     bloqueo = False
 
-print(f"🚀 {BOT_NAME} - MULTI-ACTIVO (10) ACTIVADO")
-enviar_telegram(f"🚀 **{BOT_NAME} ONLINE**\n📡 Monitoreando 10 activos con reporte de rendimiento.")
+print(f"🚀 {BOT_NAME} - OPERATIVO")
+enviar_telegram(f"🚀 **{BOT_NAME} ONLINE**\n📡 Radar activo en 10 mercados reales.")
 
 while True:
     if contador_senales >= LIMITE_SENALES:
         total = wins + losses
         efect = (wins / total * 100) if total > 0 else 0
-        enviar_telegram(f"📊 **{BOT_NAME}: REPORTE FINAL**\n──────────────────\n✅ Ganadas: **{wins}**\n❌ Perdidas: **{losses}**\n🎯 Efectividad: **{round(efect, 2)}%**\n──────────────────\n🧊 Descanso de 30 min iniciado.")
+        
+        # Generamos el diario de la sesión
+        diario = "\n".join(historial_log)
+        reporte = (f"📊 **{BOT_NAME}: REPORTE FINAL**\n"
+                   f"──────────────────\n"
+                   f"✅ Ganadas: **{wins}**\n"
+                   f"❌ Perdidas: **{losses}**\n"
+                   f"🎯 Efectividad: **{round(efect, 2)}%**\n"
+                   f"──────────────────\n"
+                   f"📖 **DIARIO DE SESIÓN:**\n{diario}\n"
+                   f"──────────────────\n"
+                   f"🧊 Descanso de 30 min iniciado.")
+        
+        enviar_telegram(reporte)
+        
         time.sleep(TIEMPO_ENFRIAMIENTO)
         contador_senales, wins, losses = 0, 0, 0
+        historial_log = []
 
     if bloqueo:
         time.sleep(10)
@@ -78,7 +97,6 @@ while True:
             precio_actual = indicators["close"]
             atr = indicators["ATR"]
             
-            # Alerta de volatilidad inteligente
             vol_alta = (atr > 0.0007) if "JPY" not in a['n'] else (atr > 0.03)
 
             if rsi >= 58.0 or rsi <= 42.0:
@@ -88,11 +106,13 @@ while True:
                 emoji = "🔻" if dir_op == "BAJA" else "🟢"
                 
                 aviso_v = "⚠️ **VOLATILIDAD ALTA**\n" if vol_alta else ""
-                enviar_telegram(f"{aviso_v}🔔 **SEÑAL #{contador_senales}: {a['n']}**\n📈 Operación: **{dir_op} {emoji}**\n📊 RSI: `{round(rsi, 2)}` | Precio: `{precio_actual}`")
+                enviar_telegram(f"{aviso_v}🔔 **SEÑAL #{contador_senales}: {a['n']}**\n"
+                                f"📈 Operación: **{dir_op} {emoji}**\n"
+                                f"📊 RSI: `{round(rsi, 2)}` | Precio: `{precio_actual}`")
                 
                 threading.Thread(target=verificar_resultado, args=(a["handler"], a["n"], precio_actual, dir_op)).start()
             
-            time.sleep(5) # Delay seguro para 10 activos
+            time.sleep(5) 
         except Exception as e:
             if "429" in str(e): time.sleep(120)
             continue
