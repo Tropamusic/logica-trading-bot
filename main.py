@@ -15,7 +15,7 @@ wins, losses = 0, 0
 LIMITE_SENALES = 5
 TIEMPO_ENFRIAMIENTO = 1800 
 
-# LISTA EXPANDIDA DE 10 ACTIVOS (MERCADO REAL)
+# LISTA DE 10 ACTIVOS (MERCADO REAL)
 activos_config = [
     {"s": "XAUUSD", "e": "OANDA", "n": "ORO ✨"},
     {"s": "EURUSD", "e": "FX_IDC", "n": "EUR/USD 🇪🇺"},
@@ -24,7 +24,7 @@ activos_config = [
     {"s": "AUDUSD", "e": "FX_IDC", "n": "AUD/USD 🇦🇺"},
     {"s": "USDCAD", "e": "FX_IDC", "n": "USD/CAD 🇨🇦"},
     {"s": "EURJPY", "e": "FX_IDC", "n": "EUR/JPY 🇯🇵"},
-    {"s": "GBP JPY", "e": "FX_IDC", "n": "GBP/JPY 🇬🇧"},
+    {"s": "GBPJPY", "e": "FX_IDC", "n": "GBP/JPY 🇬🇧"},
     {"s": "NZDUSD", "e": "FX_IDC", "n": "NZD/USD 🇳🇿"},
     {"s": "USDCHF", "e": "FX_IDC", "n": "USD/CHF 🇨🇭"}
 ]
@@ -56,13 +56,13 @@ def verificar_resultado(handler, nombre_activo, precio_entrada, direccion):
     bloqueo = False
 
 print(f"🚀 {BOT_NAME} - MULTI-ACTIVO (10) ACTIVADO")
-enviar_telegram(f"🚀 **{BOT_NAME} ONLINE**\n📡 Monitoreando 10 activos del mercado real.")
+enviar_telegram(f"🚀 **{BOT_NAME} ONLINE**\n📡 Monitoreando 10 activos con reporte de rendimiento.")
 
 while True:
     if contador_senales >= LIMITE_SENALES:
         total = wins + losses
         efect = (wins / total * 100) if total > 0 else 0
-        enviar_telegram(f"📊 **{BOT_NAME}: REPORTE**\n✅ Ganadas: {wins} | ❌ Perdidas: {losses}\n🎯 Efectividad: {round(efect, 2)}%")
+        enviar_telegram(f"📊 **{BOT_NAME}: REPORTE FINAL**\n──────────────────\n✅ Ganadas: **{wins}**\n❌ Perdidas: **{losses}**\n🎯 Efectividad: **{round(efect, 2)}%**\n──────────────────\n🧊 Descanso de 30 min iniciado.")
         time.sleep(TIEMPO_ENFRIAMIENTO)
         contador_senales, wins, losses = 0, 0, 0
 
@@ -78,8 +78,8 @@ while True:
             precio_actual = indicators["close"]
             atr = indicators["ATR"]
             
-            # Alerta de volatilidad según el activo
-            volatilidad_alta = (atr > 0.0008) if "JPY" not in a['n'] else (atr > 0.03)
+            # Alerta de volatilidad inteligente
+            vol_alta = (atr > 0.0007) if "JPY" not in a['n'] else (atr > 0.03)
 
             if rsi >= 58.0 or rsi <= 42.0:
                 bloqueo = True
@@ -87,13 +87,13 @@ while True:
                 dir_op = "BAJA" if rsi >= 58.0 else "SUBE"
                 emoji = "🔻" if dir_op == "BAJA" else "🟢"
                 
-                aviso_v = "⚠️ **VOLATILIDAD ALTA**\n" if volatilidad_alta else ""
+                aviso_v = "⚠️ **VOLATILIDAD ALTA**\n" if vol_alta else ""
                 enviar_telegram(f"{aviso_v}🔔 **SEÑAL #{contador_senales}: {a['n']}**\n📈 Operación: **{dir_op} {emoji}**\n📊 RSI: `{round(rsi, 2)}` | Precio: `{precio_actual}`")
                 
                 threading.Thread(target=verificar_resultado, args=(a["handler"], a["n"], precio_actual, dir_op)).start()
             
-            time.sleep(4) # Pausa estratégica para manejar 10 activos sin error 429
+            time.sleep(5) # Delay seguro para 10 activos
         except Exception as e:
             if "429" in str(e): time.sleep(120)
             continue
-    time.sleep(5)
+    time.sleep(10)
